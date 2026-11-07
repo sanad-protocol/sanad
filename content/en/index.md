@@ -4,9 +4,9 @@ lang: en
 path: /
 template: home
 title: Sanad: an open protocol for recomputable recognition of skills
-h1: A teacher in Beijing and an employer in Berlin can both check what you can do, and why.
+h1: Sanad: an open protocol for recomputable recognition of skills
 description: Sanad is a draft open protocol. A qualification is a chain of claim, evidence and signed attestations that anyone can recompute under their own policy. No token, not accreditation.
-lead: Sanad is an open protocol for recomputable recognition of skills. Instead of trusting an issuer, a verifier runs a published function over published evidence, with its own rules, and gets a level, a confidence and the reasons. It is a draft, it has no token, and it is not accreditation.
+lead: Sanad specifies a data model for claims, evidence and attestations, a deterministic recognition function that a verifier runs under its own policy, and a conformance suite with a reference implementation.
 ---
 
 <ul class="cta">

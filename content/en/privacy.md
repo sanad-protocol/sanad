@@ -21,7 +21,9 @@ Dr. Arash Kermani Kolankeh, Flat 1108, The Pad by Omniyat, Dubai, United Arab Em
 
 ## What this website does itself
 
-The pages are static. They set **no cookies**, use **no analytics, advertising or tracking**, load **no fonts, scripts or embedded content from other servers** and contain **no forms**. A content security policy in each page enforces this. The operator therefore processes no personal data of visitors through the site itself.
+The pages are static. They set **no cookies**, use **no analytics, advertising or tracking**, load **no fonts, scripts or embedded content from other servers** and collect **no form data**. A content security policy in each page enforces this. The operator therefore processes no personal data of visitors through the site itself.
+
+The [contact page](/contact/) has a form that only prepares an e-mail in the visitor's own mail program. The browser builds the message locally; nothing is transmitted to this site. The visitor chooses where the text goes: the Outlook web page of Microsoft (outlook.office.com or outlook.live.com), which is opened in a new tab and receives the text as part of the address, or the visitor's own mail program. Microsoft's privacy statement applies once that page is open. Nothing is sent until the visitor sends the e-mail there. See the section on e-mail below.
 
 ## Hosting and server logs (GitHub Pages)
 

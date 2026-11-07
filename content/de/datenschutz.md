@@ -21,7 +21,9 @@ Dr. Arash Kermani Kolankeh, Flat 1108, The Pad by Omniyat, Dubai, Vereinigte Ara
 
 ## Was diese Website selbst tut
 
-Die Seiten sind statisch. Sie setzen **keine Cookies**, nutzen **keine Analyse-, Werbe- oder Tracking-Dienste**, laden **keine Schriften, Skripte oder eingebetteten Inhalte von anderen Servern** und enthalten **keine Formulare**. Eine Content Security Policy in jeder Seite erzwingt das. Der Betreiber verarbeitet über die Seite selbst daher keine personenbezogenen Daten der Besucher.
+Die Seiten sind statisch. Sie setzen **keine Cookies**, nutzen **keine Analyse-, Werbe- oder Tracking-Dienste**, laden **keine Schriften, Skripte oder eingebetteten Inhalte von anderen Servern** und erheben **keine Formulardaten**. Eine Content Security Policy in jeder Seite erzwingt das. Der Betreiber verarbeitet über die Seite selbst daher keine personenbezogenen Daten der Besucher.
+
+Die [Kontaktseite](/de/kontakt/) enthält ein Formular, das lediglich eine E-Mail im eigenen Mailprogramm des Besuchers vorbereitet. Der Browser erstellt die Nachricht lokal; an diese Seite wird nichts übermittelt. Der Besucher wählt, wohin der Text geht: zur Outlook-Webseite von Microsoft (outlook.office.com oder outlook.live.com), die in einem neuen Tab geöffnet wird und den Text als Teil der Adresse erhält, oder in das eigene Mailprogramm. Sobald diese Seite geöffnet ist, gilt die Datenschutzerklärung von Microsoft. Gesendet wird erst, wenn der Besucher die E-Mail dort absendet. Siehe den Abschnitt E-Mail.
 
 ## Hosting und Server-Protokolle (GitHub Pages)
 

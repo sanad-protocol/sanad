@@ -23,13 +23,13 @@ The text of the specification and of this website is licensed under the Creative
 
 ## Patent commitment
 
-Dr. Arash Kermani Kolankeh, as steward, commits to grant, to everyone who implements the Sanad specification, a worldwide, royalty-free, non-exclusive licence under any patent claims he holds that are necessarily infringed by a conforming implementation. He holds no such patent today and does not intend to file one. The licence ends for a person who starts a patent action alleging that a conforming implementation infringes a patent.
+Dr. Arash Kermani Kolankeh, as steward, commits to grant, to everyone who implements the Sanad specification, a worldwide, royalty-free, non-exclusive licence under any patent claims the steward holds that are necessarily infringed by a conforming implementation. He holds no such patent today and does not intend to file one. The licence ends for a person who starts a patent action alleging that a conforming implementation infringes a patent.
 
 On its formation the Open Sanad Foundation will adopt a royalty-free patent policy of the kind used by the W3C and will take over this commitment. Contributors are asked to make the same commitment for their contributions.
 
 ## Trademark
 
-The name "Sanad" and the logo are not yet registered. The steward intends to file a trademark application himself and to hold the mark in trust for the foundation. Until a registration is granted this site does not use trademark symbols. The project asks that the word not be used for something that is not an implementation of this specification.
+The name "Sanad" and the logo are not yet registered. The steward intends to file a trademark application in person and to hold the mark in trust for the foundation. Until a registration is granted this site does not use trademark symbols. The project asks that the word not be used for something that is not an implementation of this specification.
 
 ## Conformance mark
 

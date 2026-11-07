@@ -15,7 +15,7 @@ type V = { id: string; name: string; policy: Policy; credential: { skill: string
 const build = (v: V): Credential => { const c = sealCredential(v.credential as never); return v.tamper ? applyTamper(c, v.tamper) : c; };
 
 describe('SHA-256 and canonical JSON', () => {
-  const samples = ['', 'abc', 'The quick brown fox jumps over the lazy dog', 'a'.repeat(55), 'a'.repeat(56), 'a'.repeat(64), 'b'.repeat(1000), 'ε–δ and الجبر و فارسی 🙂'];
+  const samples = ['', 'abc', 'The quick brown fox jumps over the lazy dog', 'a'.repeat(55), 'a'.repeat(56), 'a'.repeat(64), 'b'.repeat(1000), 'ε–δ and ünï 🙂'];
   it('matches node:crypto on edge-sized and unicode inputs', () => { for (const s of samples) expect(sha256Hex(s), JSON.stringify(s.slice(0, 20))).toBe(createHash('sha256').update(s, 'utf8').digest('hex')); });
   it('matches WebCrypto (the second, independent implementation the page uses)', async () => { for (const s of samples) expect(await sha256HexWebCrypto(s)).toBe(sha256Hex(s)); });
   it('has the standard test vector for "abc"', () => { expect(sha256Hex('abc')).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad'); });

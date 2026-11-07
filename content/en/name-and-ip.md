@@ -20,7 +20,7 @@ Sanad stands for a document and the chain of support behind it, the chain by whi
 
 ## Clearance status
 
-A first web search found no credential or education protocol called Sanad. Sanad is, however, a common word and a common name in the Gulf region, used by many businesses and services. **Formal trademark clearance is pending**: the official registers have not been searched, and the descriptor "Sanad Protocol" is expected to be needed. The trademark application will be filed by the steward himself; it has not been filed.
+A first web search found no credential or education protocol called Sanad. Sanad is, however, a common word and a common name in the Gulf region, used by many businesses and services. **Formal trademark clearance is pending**: the official registers have not been searched, and the descriptor "Sanad Protocol" is expected to be needed. The trademark application will be filed by the steward in person; it has not been filed.
 
 ## Plan
 

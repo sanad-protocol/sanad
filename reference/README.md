@@ -11,7 +11,7 @@ A small TypeScript implementation of the Sanad recognition function with no runt
 | `src/infer.ts` | Rule R8 (hidden skills, inferred, with derivation paths) |
 | `src/sample.ts` | The worked example of Appendix A of the specification |
 | `vectors.json` | 15 recognition vectors and 5 inference vectors with expected results |
-| `verify.mjs` | Command-line verifier: runs every vector and prints pass or fail with the rule identifiers |
+| `verify.mjs`, `run.mjs` | Command-line verifier (`verify.mjs`) and the function that runs every vector (`run.mjs`) |
 | `dist/sanad-reference.mjs` | One dependency-free ES module built by `build.mjs` |
 
 ## Run the vectors

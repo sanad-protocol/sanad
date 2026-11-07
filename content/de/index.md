@@ -4,9 +4,9 @@ lang: de
 path: /de/
 template: home
 title: Sanad: ein offenes Protokoll zur nachrechenbaren Anerkennung von Fähigkeiten
-h1: Ein offenes Protokoll zur nachrechenbaren Anerkennung von Fähigkeiten
+h1: Sanad: ein offenes Protokoll zur nachrechenbaren Anerkennung von Fähigkeiten
 description: Sanad ist ein Protokoll im Entwurfsstadium. Eine Qualifikation ist eine Kette aus Behauptung, Nachweisen und signierten Bestätigungen, die jede Stelle nach eigener Richtlinie nachrechnen kann. Kein Token, keine Akkreditierung.
-lead: Mit Sanad lässt sich prüfen, was eine Person kann, indem eine veröffentlichte Nachweiskette nachgerechnet wird, statt einer ausstellenden Stelle zu vertrauen. Sanad ist ein Entwurf, hat kein Token und ist keine Akkreditierung.
+lead: Sanad legt ein Datenmodell für Behauptungen, Nachweise und Bestätigungen fest, eine deterministische Anerkennungsfunktion, die eine prüfende Stelle nach ihrer eigenen Richtlinie ausführt, und eine Konformitätsprüfung mit Referenzimplementierung.
 ---
 
 <ul class="cta">

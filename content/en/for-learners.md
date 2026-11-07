@@ -9,15 +9,26 @@ crumbs: [["Who it is for","/for/"]]
 ---
 
 <!-- glance -->
-- You keep your own evidence; no institution has to stay open for it to remain checkable.
-- You decide what is published. Nothing is public by default.
+- The holder keeps the claims and the evidence; nothing is public by default.
+- The holder chooses what is disclosed and to whom.
 <!-- /glance -->
 
-If your degree, school or employer is out of reach, a certificate on paper may not help you. A Sanad chain records a claim about a skill, the evidence behind it and who signed what they saw. Anyone you choose can recompute it.
+## What the holder has
 
-- Practice runs can be replayed from their seeds, so they prove effort, but they count for less than a watched sitting.
-- A live sitting with independent examiners carries the most weight; the examiners' names and records are part of the chain.
-- Skills that follow from one you have shown (its prerequisites) are suggested to you as **inferred**, with the reason. You choose whether to publish them.
-- Sanad does not rank you and does not decide what a university or employer must accept.
+A Sanad chain records a claim about a skill, the evidence behind it and the attestors who signed what they observed. Any party that the holder chooses can recompute it. It remains verifiable without the continued operation of any one institution.
 
-**Next step:** read the [worked example](/#ex-h) on the home page, then the [questions and answers](/faq/). Sanad is a draft: no sittings under it are offered yet.
+## Evidence and its weight
+
+- Practice runs can be replayed from their seeds. They count for less than a live sitting.
+- A live sitting with independent examiners carries the most weight; the examiners' identifiers and records are part of the chain.
+- Reviewed work and peer review are further kinds of evidence with their own weights.
+
+## Inferred skills
+
+Prerequisite skills that follow from a demonstrated skill are listed as **inferred**, with the derivation. Publication is the holder's choice.
+
+## Limits
+
+Sanad does not rank holders and does not decide what a university or employer must accept. It is a draft; no sittings under it are offered yet.
+
+**Next step:** read the [questions and clarifications](/faq/) and section 10 of the [specification](/spec/0.1/) on privacy and disclosure.

@@ -22,7 +22,7 @@ description: What Sanad is today, what has been reviewed, what has not, and what
 ## What has not been done
 
 - Review by a standards body, a lawyer or an external cryptographer.
-- Trademark registration (the steward will file the application himself; not yet filed) and copyright deposit (see [the name](/name-and-ip/) and [intellectual property policy](/ipr/)).
+- Trademark registration (the steward will file the application in person; not yet filed) and copyright deposit (see [the name](/name-and-ip/) and [intellectual property policy](/ipr/)).
 - Independent implementations, conformance testing, real attestors outside the author's circle.
 - Native-speaker review of the German text.
 

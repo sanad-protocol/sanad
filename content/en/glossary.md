@@ -7,6 +7,8 @@ title: Glossary
 description: Terms used by the Sanad specification.
 ---
 
+<!-- az -->
+
 <dl class="defs">
 <dt id="attestation">Attestation</dt><dd>A signed statement by an attestor about one evidence item: the level awarded, the role, a conflict-of-interest declaration, a blind-marking commitment and its reveal.</dd>
 <dt id="attestor">Attestor</dt><dd>A person or organisation, identified by a decentralised identifier, who signs attestations. Nobody appoints attestors for the protocol; verifiers choose which to accept.</dd>

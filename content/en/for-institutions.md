@@ -9,15 +9,24 @@ crumbs: [["Who it is for","/for/"]]
 ---
 
 <!-- glance -->
-- You write the policy; the function is public and deterministic.
-- The result always comes with a step-by-step explanation you can show to an applicant or an auditor.
+- The verifier defines the policy; the function is public and deterministic.
+- The result is returned with an ordered, step-by-step explanation.
 <!-- /glance -->
 
-You do not have to trust an issuer or a brand. You decide how much evidence you require and from whom, then run the published function.
+## Policy
 
-- A policy states, for example: at least three attestors, one live sitting, evidence no older than two years, attestors with at least five sittings.
-- The same evidence can give different levels under different policies; both results can be explained. [See the worked example](/#ex-h) and try other policies in the [explainer](/explainer/).
-- Sanad is **not accreditation**. It does not tell you what to accept and gives no legal recognition. Degrees remain what states and institutions say they are.
-- Matching or ranking applicants with software can be regulated as high-risk in the European Union; the specification forbids a score of a person across skills.
+A verifier states how much evidence it requires and from whom: the number of attestors, whether a live sitting is required, the maximum age of evidence, the minimum record of attestors. The published function is then run under that policy.
 
-**Next step:** write down the policy you would use for one role or course and run it on the sample credential with the [reference verifier](/conformance/).
+## Result
+
+The function returns a status (not recognised, provisional, recognised), a level from 0 to 5, a confidence and an ordered explanation by rule (R1 to R8). The same evidence can yield different results under different policies; each result can be explained.
+
+## Scope
+
+Sanad is not accreditation. It does not state what a verifier must accept and gives no legal recognition. Degrees remain what states and institutions declare them to be.
+
+## Regulatory note
+
+Ranking or filtering applicants with software can be regulated as high-risk in the European Union. The specification forbids a score of a person across skills.
+
+**Next step:** write the policy that applies to one role or course and run it with the [reference verifier](/conformance/).

@@ -57,7 +57,7 @@ Before version 1.0 there must be at least **three independent stewards from at l
 
 ## Name and conformance mark
 
-The name is to be held by the foundation (interim: the steward, in trust). A trademark application will be filed by the steward himself; it has not been filed. Any implementation that passes the public vectors may say that it conforms to Sanad. The mark is free and never sold. See the [intellectual property policy](/ipr/).
+The name is to be held by the foundation (interim: the steward, in trust). A trademark application will be filed by the steward in person; it has not been filed. Any implementation that passes the public vectors may say that it conforms to Sanad. The mark is free and never sold. See the [intellectual property policy](/ipr/).
 
 ## Succession
 
