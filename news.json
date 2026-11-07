@@ -1,0 +1,26 @@
+[
+  {
+    "id": "2026-11-07-reference",
+    "date": "2026-11-07",
+    "title": "Reference implementation and test vectors published",
+    "summary": "The repository contains a dependency-free reference implementation, 15 recognition vectors and 5 inference vectors, and a command-line verifier (node reference/verify.mjs)."
+  },
+  {
+    "id": "2026-11-07-draft",
+    "date": "2026-11-07",
+    "title": "Specification draft v0.1 prepared",
+    "summary": "The first draft of the Sanad specification (data model, recognition function, transparency log, privacy and threats) has been written and is open for discussion. It has not been reviewed by a standards body, a lawyer or an external cryptographer."
+  },
+  {
+    "id": "2026-11-07-name",
+    "date": "2026-11-07",
+    "title": "Name and legal form decided",
+    "summary": "The protocol is called Sanad. The Open Sanad Foundation is to be established in the United Arab Emirates; until it exists, Dr. Arash Kermani Kolankeh acts as interim steward."
+  },
+  {
+    "id": "2026-11-07-site",
+    "date": "2026-11-07",
+    "title": "Website published in draft",
+    "summary": "sanadprotocol.org is online in English, with draft translations in German, Arabic and Persian. It uses no cookies, no analytics and no external requests."
+  }
+]

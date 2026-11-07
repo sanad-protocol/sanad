@@ -1,0 +1,1584 @@
+{
+ "algorithm": "sanad-0.1",
+ "note": "Authoring form: evidence and attestations are sealed (hashes, commits, chain) by the tests and the page before use. Expected values were computed by an independent script, not by recognise().",
+ "vectors": [
+  {
+   "id": "V01",
+   "name": "No evidence at all: nothing is recognised",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [],
+    "attestations": [],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "not-recognised",
+    "level": 0,
+    "attestedLevel": null,
+    "confidence": 0,
+    "dropped": [],
+    "rules": [
+     "R1",
+     "R2",
+     "R5",
+     "R6",
+     "R7"
+    ]
+   }
+  },
+  {
+   "id": "V02",
+   "name": "Automatic record only: provisional, capped at level 3 even though the replay says 5",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "auto",
+      "date": "2026-10-20",
+      "summary": "40 seeded exercises replayed",
+      "body": {
+       "autoLevel": 5,
+       "seeds": [
+        "K7Q",
+        "M2M"
+       ]
+      }
+     }
+    ],
+    "attestations": [],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "provisional",
+    "level": 3,
+    "attestedLevel": null,
+    "confidence": 0.246,
+    "dropped": [],
+    "rules": [
+     "R3",
+     "R4",
+     "R5",
+     "R6",
+     "R7"
+    ]
+   }
+  },
+  {
+   "id": "V03",
+   "name": "One sitting examiner while the policy needs two: provisional (attested 4, not independent)",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "provisional",
+    "level": 0,
+    "attestedLevel": 4,
+    "confidence": 0.579,
+    "dropped": [],
+    "rules": [
+     "R4",
+     "R5",
+     "R6"
+    ]
+   }
+  },
+  {
+   "id": "V04",
+   "name": "Two agreeing examiners: recognised at 4",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:b",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "recognised",
+    "level": 4,
+    "attestedLevel": 4,
+    "confidence": 0.823,
+    "dropped": [],
+    "rules": [
+     "R3",
+     "R4",
+     "R5",
+     "R6",
+     "R7"
+    ]
+   }
+  },
+  {
+   "id": "V05",
+   "name": "Examiners disagree (5 and 3): lower median 3, weights halved",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 5,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 5,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:b",
+      "evidence": "E1",
+      "level": 3,
+      "date": "2026-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "recognised",
+    "level": 3,
+    "attestedLevel": 3,
+    "confidence": 0.495,
+    "dropped": [],
+    "rules": [
+     "R4",
+     "R7"
+    ]
+   }
+  },
+  {
+   "id": "V06",
+   "name": "A third examiner declared a conflict of interest: ignored, the result does not change",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:b",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-3",
+      "attestor": "did:sanad:c",
+      "evidence": "E1",
+      "level": 5,
+      "date": "2026-10-05",
+      "conflictDeclared": true
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "recognised",
+    "level": 4,
+    "attestedLevel": 4,
+    "confidence": 0.823,
+    "dropped": [
+     [
+      "att-3",
+      "R2"
+     ]
+    ],
+    "rules": [
+     "R2"
+    ]
+   }
+  },
+  {
+   "id": "V07",
+   "name": "Stale evidence (61 months old, half-life 12): dropped, nothing left",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 12,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2021-10-01",
+      "summary": "Old sitting",
+      "body": {
+       "sitting": "S-0"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2021-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:b",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2021-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "not-recognised",
+    "level": 0,
+    "attestedLevel": null,
+    "confidence": 0,
+    "dropped": [
+     [
+      "E1",
+      "R2"
+     ]
+    ],
+    "rules": [
+     "R2"
+    ]
+   }
+  },
+  {
+   "id": "V08",
+   "name": "One mark was changed after sealing (4 to 5): that attestation is dropped, the rest is provisional",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:b",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "provisional",
+    "level": 0,
+    "attestedLevel": 4,
+    "confidence": 0.579,
+    "dropped": [
+     [
+      "att-2",
+      "R1"
+     ]
+    ],
+    "rules": [
+     "R1",
+     "R5"
+    ]
+   },
+   "tamper": [
+    {
+     "attestation": "att-2",
+     "set": {
+      "level": 5
+     }
+    }
+   ]
+  },
+  {
+   "id": "V09a",
+   "name": "Same evidence, LOOSE verifier (1 attestor enough, no thresholds): recognised at 4",
+   "policy": {
+    "minAttestors": 1,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E0",
+      "kind": "auto",
+      "date": "2026-10-20",
+      "summary": "40 seeded exercises replayed",
+      "body": {
+       "autoLevel": 3
+      }
+     },
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     },
+     {
+      "id": "E2",
+      "kind": "peer",
+      "date": "2026-09-30",
+      "summary": "Peer review by two learners",
+      "body": {
+       "reviewer": "p1"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:c",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:d",
+      "evidence": "E2",
+      "level": 3,
+      "date": "2026-10-02"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "recognised",
+    "level": 4,
+    "attestedLevel": 4,
+    "confidence": 0.729,
+    "dropped": [],
+    "rules": [
+     "R5",
+     "R6"
+    ]
+   }
+  },
+  {
+   "id": "V09b",
+   "name": "Same evidence, STRICT verifier (2 attestors, live sitting, 5+ sittings each): both humans ignored, provisional at 3",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": true,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 5,
+    "minAgreement": 0.6,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E0",
+      "kind": "auto",
+      "date": "2026-10-20",
+      "summary": "40 seeded exercises replayed",
+      "body": {
+       "autoLevel": 3
+      }
+     },
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     },
+     {
+      "id": "E2",
+      "kind": "peer",
+      "date": "2026-09-30",
+      "summary": "Peer review by two learners",
+      "body": {
+       "reviewer": "p1"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:c",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:d",
+      "evidence": "E2",
+      "level": 3,
+      "date": "2026-10-02"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "provisional",
+    "level": 3,
+    "attestedLevel": null,
+    "confidence": 0.246,
+    "dropped": [
+     [
+      "att-1",
+      "R2"
+     ],
+     [
+      "att-2",
+      "R2"
+     ]
+    ],
+    "rules": [
+     "R2",
+     "R5",
+     "R6"
+    ]
+   }
+  },
+  {
+   "id": "V10",
+   "name": "Artifact evidence is capped at 4 even when the reviewer says 5",
+   "policy": {
+    "minAttestors": 1,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 5,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "artifact",
+      "date": "2026-10-02",
+      "summary": "Proof portfolio",
+      "body": {
+       "pdf": "sha256-of-the-pdf"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 5,
+      "date": "2026-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "recognised",
+    "level": 4,
+    "attestedLevel": 4,
+    "confidence": 0.29,
+    "dropped": [],
+    "rules": [
+     "R4",
+     "R6"
+    ]
+   }
+  },
+  {
+   "id": "V11",
+   "name": "Policy requires a live sitting; only an artifact exists: provisional",
+   "policy": {
+    "minAttestors": 1,
+    "requireLive": true,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "artifact",
+      "date": "2026-10-02",
+      "summary": "Proof portfolio",
+      "body": {
+       "pdf": "sha256-of-the-pdf"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "provisional",
+    "level": 0,
+    "attestedLevel": 4,
+    "confidence": 0.29,
+    "dropped": [],
+    "rules": [
+     "R5"
+    ]
+   }
+  },
+  {
+   "id": "V12",
+   "name": "An attestor whose agreement with other examiners is below the policy threshold is ignored",
+   "policy": {
+    "minAttestors": 1,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0.6,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:low",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "recognised",
+    "level": 4,
+    "attestedLevel": 4,
+    "confidence": 0.579,
+    "dropped": [
+     [
+      "att-2",
+      "R2"
+     ]
+    ],
+    "rules": [
+     "R2"
+    ]
+   }
+  },
+  {
+   "id": "V13",
+   "name": "Evidence dated after the evaluation day is ignored",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 4,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-12-01",
+      "summary": "Sitting in the future",
+      "body": {
+       "sitting": "S-9"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-12-02"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:b",
+      "evidence": "E1",
+      "level": 4,
+      "date": "2026-12-02"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "not-recognised",
+    "level": 0,
+    "attestedLevel": null,
+    "confidence": 0,
+    "dropped": [
+     [
+      "E1",
+      "R2"
+     ]
+    ],
+    "rules": [
+     "R2"
+    ]
+   }
+  },
+  {
+   "id": "V14",
+   "name": "The claim is lower than the evidence: the recognised level never exceeds the claim",
+   "policy": {
+    "minAttestors": 2,
+    "requireLive": false,
+    "halfLifeMonths": 24,
+    "minAttestorSittings": 0,
+    "minAgreement": 0,
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7,
+    "asOf": "2026-11-07"
+   },
+   "credential": {
+    "skill": "B09",
+    "claimedLevel": 3,
+    "subject": "urn:uuid:test-subject",
+    "evidence": [
+     {
+      "id": "E1",
+      "kind": "sitting",
+      "date": "2026-10-01",
+      "summary": "Live sitting",
+      "body": {
+       "sitting": "S-1",
+       "paper": "B09-final"
+      }
+     }
+    ],
+    "attestations": [
+     {
+      "id": "att-1",
+      "attestor": "did:sanad:a",
+      "evidence": "E1",
+      "level": 5,
+      "date": "2026-10-05"
+     },
+     {
+      "id": "att-2",
+      "attestor": "did:sanad:b",
+      "evidence": "E1",
+      "level": 5,
+      "date": "2026-10-05"
+     }
+    ],
+    "attestors": {
+     "did:sanad:a": {
+      "sittings": 12,
+      "agreement": 0.9
+     },
+     "did:sanad:b": {
+      "sittings": 8,
+      "agreement": 0.85
+     },
+     "did:sanad:c": {
+      "sittings": 3,
+      "agreement": 0.8
+     },
+     "did:sanad:d": {
+      "sittings": 1,
+      "agreement": 0.7
+     },
+     "did:sanad:low": {
+      "sittings": 10,
+      "agreement": 0.4
+     }
+    }
+   },
+   "expect": {
+    "status": "recognised",
+    "level": 3,
+    "attestedLevel": 3,
+    "confidence": 0.823,
+    "dropped": [],
+    "rules": [
+     "R6"
+    ]
+   }
+  }
+ ],
+ "inference": [
+  {
+   "id": "I1",
+   "name": "Depth 2 from S at level 4: P1 and Q1 at 3, P2 and X at 2; P3 is too far",
+   "graph": {
+    "ids": [
+     "S",
+     "P1",
+     "P2",
+     "P3",
+     "Q1",
+     "X"
+    ],
+    "requires": {
+     "S": [
+      "P1",
+      "Q1"
+     ],
+     "P1": [
+      "P2",
+      "X"
+     ],
+     "P2": [
+      "P3"
+     ],
+     "Q1": [
+      "X"
+     ]
+    }
+   },
+   "skill": "S",
+   "level": 4,
+   "confidence": 0.8,
+   "policy": {
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7
+   },
+   "direct": [],
+   "expect": [
+    [
+     "P1",
+     3,
+     0.56,
+     1,
+     [
+      "S",
+      "P1"
+     ]
+    ],
+    [
+     "Q1",
+     3,
+     0.56,
+     1,
+     [
+      "S",
+      "Q1"
+     ]
+    ],
+    [
+     "P2",
+     2,
+     0.392,
+     2,
+     [
+      "S",
+      "P1",
+      "P2"
+     ]
+    ],
+    [
+     "X",
+     2,
+     0.392,
+     2,
+     [
+      "S",
+      "P1",
+      "X"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "I2",
+   "name": "A skill the holder already claims directly is not inferred",
+   "graph": {
+    "ids": [
+     "S",
+     "P1",
+     "P2",
+     "P3",
+     "Q1",
+     "X"
+    ],
+    "requires": {
+     "S": [
+      "P1",
+      "Q1"
+     ],
+     "P1": [
+      "P2",
+      "X"
+     ],
+     "P2": [
+      "P3"
+     ],
+     "Q1": [
+      "X"
+     ]
+    }
+   },
+   "skill": "S",
+   "level": 4,
+   "confidence": 0.8,
+   "policy": {
+    "maxInferenceDepth": 2,
+    "inferenceDecay": 0.7
+   },
+   "direct": [
+    "P2"
+   ],
+   "expect": [
+    [
+     "P1",
+     3,
+     0.56,
+     1,
+     [
+      "S",
+      "P1"
+     ]
+    ],
+    [
+     "Q1",
+     3,
+     0.56,
+     1,
+     [
+      "S",
+      "Q1"
+     ]
+    ],
+    [
+     "X",
+     2,
+     0.392,
+     2,
+     [
+      "S",
+      "P1",
+      "X"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "I3",
+   "name": "Depth 1 only",
+   "graph": {
+    "ids": [
+     "S",
+     "P1",
+     "P2",
+     "P3",
+     "Q1",
+     "X"
+    ],
+    "requires": {
+     "S": [
+      "P1",
+      "Q1"
+     ],
+     "P1": [
+      "P2",
+      "X"
+     ],
+     "P2": [
+      "P3"
+     ],
+     "Q1": [
+      "X"
+     ]
+    }
+   },
+   "skill": "S",
+   "level": 3,
+   "confidence": 0.5,
+   "policy": {
+    "maxInferenceDepth": 1,
+    "inferenceDecay": 0.7
+   },
+   "direct": [],
+   "expect": [
+    [
+     "P1",
+     2,
+     0.35,
+     1,
+     [
+      "S",
+      "P1"
+     ]
+    ],
+    [
+     "Q1",
+     2,
+     0.35,
+     1,
+     [
+      "S",
+      "Q1"
+     ]
+    ]
+   ]
+  },
+  {
+   "id": "I4",
+   "name": "Level 1 implies nothing (the level would drop to 0)",
+   "graph": {
+    "ids": [
+     "S",
+     "P1",
+     "P2",
+     "P3",
+     "Q1",
+     "X"
+    ],
+    "requires": {
+     "S": [
+      "P1",
+      "Q1"
+     ],
+     "P1": [
+      "P2",
+      "X"
+     ],
+     "P2": [
+      "P3"
+     ],
+     "Q1": [
+      "X"
+     ]
+    }
+   },
+   "skill": "S",
+   "level": 1,
+   "confidence": 0.9,
+   "policy": {
+    "maxInferenceDepth": 3,
+    "inferenceDecay": 0.7
+   },
+   "direct": [],
+   "expect": []
+  },
+  {
+   "id": "I5",
+   "name": "Depth 3 reaches P3 at level 1 with confidence 0.8 x 0.7^3",
+   "graph": {
+    "ids": [
+     "S",
+     "P1",
+     "P2",
+     "P3",
+     "Q1",
+     "X"
+    ],
+    "requires": {
+     "S": [
+      "P1",
+      "Q1"
+     ],
+     "P1": [
+      "P2",
+      "X"
+     ],
+     "P2": [
+      "P3"
+     ],
+     "Q1": [
+      "X"
+     ]
+    }
+   },
+   "skill": "S",
+   "level": 4,
+   "confidence": 0.8,
+   "policy": {
+    "maxInferenceDepth": 3,
+    "inferenceDecay": 0.7
+   },
+   "direct": [],
+   "expect": [
+    [
+     "P1",
+     3,
+     0.56,
+     1,
+     [
+      "S",
+      "P1"
+     ]
+    ],
+    [
+     "Q1",
+     3,
+     0.56,
+     1,
+     [
+      "S",
+      "Q1"
+     ]
+    ],
+    [
+     "P2",
+     2,
+     0.392,
+     2,
+     [
+      "S",
+      "P1",
+      "P2"
+     ]
+    ],
+    [
+     "X",
+     2,
+     0.392,
+     2,
+     [
+      "S",
+      "P1",
+      "X"
+     ]
+    ],
+    [
+     "P3",
+     1,
+     0.274,
+     3,
+     [
+      "S",
+      "P1",
+      "P2",
+      "P3"
+     ]
+    ]
+   ]
+  }
+ ]
+}

@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use or cite Sanad, please cite it as below."
+title: "Sanad v0.1: an open protocol for recomputable recognition of skills"
+type: software
+version: "0.1"
+date-released: "2026-11-07"
+url: "https://sanadprotocol.org/spec/0.1/"
+repository-code: "https://github.com/sanad-protocol/sanadprotocol.org"
+license: "CC-BY-4.0"
+abstract: "Sanad is an open protocol in which a qualification is a chain of claim, evidence and signed attestations that anyone can recompute under their own policy. Draft; not accreditation; no token."
+keywords:
+  - skills
+  - credentials
+  - verifiable credentials
+  - recognition of qualifications
+  - open standard
+authors:
+  - family-names: "Kermani Kolankeh"
+    given-names: "Arash"
