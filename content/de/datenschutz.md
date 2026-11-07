@@ -8,7 +8,7 @@ toc: true
 ---
 
 <!-- glance -->
-- Die Seite setzt keine Cookies, verwendet keine Analyse und stellt keine Anfragen an andere Server.
+- Die Seite setzt keine Cookies, verwendet keine Analyse und stellt keine Anfragen an andere Server, außer dem Kontaktformular, das erst beim Klick auf Senden an den eigenen Server des Projekts sendet.
 - Der Hosting-Anbieter GitHub Pages protokolliert IP-Adressen der Besucher aus Sicherheitsgründen.
 - Ihre Rechte können Sie per E-Mail an contact@sanadprotocol.org ausüben.
 <!-- /glance -->
@@ -21,9 +21,9 @@ Dr. Arash Kermani Kolankeh, Flat 1108, The Pad by Omniyat, Dubai, Vereinigte Ara
 
 ## Was diese Website selbst tut
 
-Die Seiten sind statisch. Sie setzen **keine Cookies**, nutzen **keine Analyse-, Werbe- oder Tracking-Dienste**, laden **keine Schriften, Skripte oder eingebetteten Inhalte von anderen Servern** und erheben **keine Formulardaten**. Eine Content Security Policy in jeder Seite erzwingt das. Der Betreiber verarbeitet über die Seite selbst daher keine personenbezogenen Daten der Besucher.
+Die Seiten sind statisch. Sie setzen **keine Cookies**, nutzen **keine Analyse-, Werbe- oder Tracking-Dienste**, laden **keine Schriften, Skripte oder eingebetteten Inhalte von anderen Servern** und stellen **keine Anfragen an andere Server**, außer dass die Kontaktseite die Nachricht des Besuchers an den Server des Projekts senden kann, wie unten beschrieben. Eine Content Security Policy in jeder Seite erzwingt das. Abgesehen von dieser Nachricht verarbeitet der Betreiber über die Seite selbst keine personenbezogenen Daten der Besucher.
 
-Die [Kontaktseite](/de/kontakt/) enthält ein Formular, das lediglich eine E-Mail im eigenen Mailprogramm des Besuchers vorbereitet. Der Browser erstellt die Nachricht lokal; an diese Seite wird nichts übermittelt. Der Besucher wählt, wohin der Text geht: zur Outlook-Webseite von Microsoft (outlook.office.com oder outlook.live.com), die in einem neuen Tab geöffnet wird und den Text als Teil der Adresse erhält, oder in das eigene Mailprogramm. Sobald diese Seite geöffnet ist, gilt die Datenschutzerklärung von Microsoft. Gesendet wird erst, wenn der Besucher die E-Mail dort absendet. Siehe den Abschnitt E-Mail.
+Die [Kontaktseite](/de/kontakt/) enthält ein Formular. Wenn der Besucher auf Senden klickt, übermittelt der Browser den Formularinhalt (Name und Antwortadresse, falls angegeben, Betreff, Nachricht) an den Server des Projekts unter rtc.kamangir.school und an keinen anderen Server. Der Server speichert die Nachricht, um sie zu beantworten, und leitet sie an das Projektpostfach weiter. Von der Adresse des Besuchers behält er nur einen gesalzenen Hashwert für die Begrenzung der Anfragenzahl, der nach 24 Stunden gelöscht wird. Nachrichten werden nach 12 Monaten gelöscht. Für eine frühere Löschung schreiben Sie an contact@sanadprotocol.org. Rechtsgrundlage ist die Anfrage des Besuchers und das Interesse des Verantwortlichen an ihrer Beantwortung, Art. 6 Abs. 1 lit. b und f DSGVO.
 
 ## Hosting und Server-Protokolle (GitHub Pages)
 

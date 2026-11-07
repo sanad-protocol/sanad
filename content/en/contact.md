@@ -8,21 +8,21 @@ description: Project mailboxes and addresses of Sanad.
 
 ## Write to the project
 
-This page sends nothing. The form only prepares a message: the text is passed to the Outlook page that you open (or to your own mail program), and you send it yourself from there. The site does not receive or store it. Replies may take several days.
+Messages are sent to the project and stored on its server to answer them. See the <a href="/privacy/">privacy statement</a>. Replies may take several days.
 
-<form class="mailform" id="mailform" action="mailto:contact@sanadprotocol.org" method="post" enctype="text/plain" data-to="contact@sanadprotocol.org" data-prefix="[Sanad] " data-sec="Security reports: please use the security page." data-blocked="The browser blocked the new tab. Allow pop-ups for this site or use another option." data-need="Please enter a message.">
+<form class="mailform" id="mailform" method="post" novalidate data-endpoint="https://rtc.kamangir.school/api/v1/contact" data-sending="Sending…" data-sent="Thank you. Your message has been sent." data-err="The message could not be sent. Your text is kept above. Please write to contact@sanadprotocol.org instead." data-need="Please enter a message." data-sec="Security reports: please use the security page.">
 <p><label for="f-name">Name (optional)</label><input id="f-name" name="name" type="text" autocomplete="name"></p>
 <p><label for="f-mail">Your e-mail address for the reply (optional)</label><input id="f-mail" name="email" type="email" autocomplete="email"></p>
 <p><label for="f-subj">Subject</label><select id="f-subj" name="subject"><option value="general">General</option><option value="specification">Specification comment</option><option value="implementation">Implementation</option><option value="press">Press</option><option value="security">Security</option></select></p>
 <p id="f-secnote" class="formnote">Security reports are not handled by this form. See <a href="/security/">Security</a> and write to security@sanadprotocol.org.</p>
 <p><label for="f-msg">Message</label><textarea id="f-msg" name="message" rows="8" required></textarea></p>
 <p class="hp" aria-hidden="true"><label for="f-web">Leave this field empty</label><input id="f-web" name="website" type="text" tabindex="-1" autocomplete="off"></p>
-<p class="formbtns"><button class="btn primary" type="submit" value="outlook">Write in Outlook</button> <button class="btn" type="submit" value="live">Outlook.com / personal account</button> <button class="btn" type="submit" value="mailto">Open in my mail program</button></p>
-<p><span id="f-status" class="formnote" role="status"></span></p>
+<p><button class="btn primary" type="submit" id="f-send">Send</button></p>
+<p id="f-status" class="formnote" role="status" aria-live="polite"></p>
+<noscript><p class="formnote">Sending needs JavaScript. Without it, write to the address below.</p></noscript>
 </form>
 
-<p class="formnote">The buttons need JavaScript. Without it, use the plain address below.</p>
-<p>If your mail program does not open, write to <a href="mailto:contact@sanadprotocol.org">contact@sanadprotocol.org</a> <button type="button" class="btn small" id="copyaddr" data-copied="Copied" data-label="Copy address" hidden>Copy address</button></p>
+<p class="formnote">Plain address, if sending does not work: <a href="mailto:contact@sanadprotocol.org">contact@sanadprotocol.org</a></p>
 
 ## Addresses
 

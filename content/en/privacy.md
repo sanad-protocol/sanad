@@ -8,7 +8,7 @@ toc: true
 ---
 
 <!-- glance -->
-- The site sets no cookies, uses no analytics and makes no requests to other servers.
+- The site sets no cookies, uses no analytics and makes no requests to other servers except the contact form, which sends to the project's own server only when Send is pressed.
 - The host, GitHub Pages, logs visitors' IP addresses for security.
 - You may exercise your rights by writing to contact@sanadprotocol.org.
 <!-- /glance -->
@@ -21,9 +21,9 @@ Dr. Arash Kermani Kolankeh, Flat 1108, The Pad by Omniyat, Dubai, United Arab Em
 
 ## What this website does itself
 
-The pages are static. They set **no cookies**, use **no analytics, advertising or tracking**, load **no fonts, scripts or embedded content from other servers** and collect **no form data**. A content security policy in each page enforces this. The operator therefore processes no personal data of visitors through the site itself.
+The pages are static. They set **no cookies**, use **no analytics, advertising or tracking**, load **no fonts, scripts or embedded content from other servers** and make **no requests to other servers**, except that the contact page may send the visitor's message to the project's server, as described below. A content security policy in each page enforces this. Apart from that message, the operator processes no personal data of visitors through the site itself.
 
-The [contact page](/contact/) has a form that only prepares an e-mail in the visitor's own mail program. The browser builds the message locally; nothing is transmitted to this site. The visitor chooses where the text goes: the Outlook web page of Microsoft (outlook.office.com or outlook.live.com), which is opened in a new tab and receives the text as part of the address, or the visitor's own mail program. Microsoft's privacy statement applies once that page is open. Nothing is sent until the visitor sends the e-mail there. See the section on e-mail below.
+The [contact page](/contact/) has a form. When a visitor presses Send, the browser transmits the form content (name and reply address if entered, subject, message) to the project's server at rtc.kamangir.school, and to no other server. The server stores the message to answer it and forwards it to the project mailbox. It keeps no record of the visitor's address beyond a salted hash used for rate limiting, which is deleted after 24 hours. Messages are deleted after 12 months. To have a message deleted earlier, write to contact@sanadprotocol.org. The legal basis is the visitor's request and the controller's interest in answering it, Article 6(1)(b) and (f) GDPR.
 
 ## Hosting and server logs (GitHub Pages)
 

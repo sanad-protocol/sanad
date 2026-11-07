@@ -10,22 +10,21 @@
   var subj = document.getElementById('f-subj'), status = document.getElementById('f-status'), secnote = document.getElementById('f-secnote');
   var label = function (el) { return el.options[el.selectedIndex].text; };
   function sync() { secnote.hidden = subj.value !== 'security'; } sync(); subj.addEventListener('change', sync);
+  var send = document.getElementById('f-send');
+  var say = function (key) { status.textContent = form.getAttribute('data-' + key); };
   form.addEventListener('submit', function (e) {
     e.preventDefault();
-    if (document.getElementById('f-web').value) return;
-    if (subj.value === 'security') { status.textContent = form.getAttribute('data-sec'); return; }
-    var msg = document.getElementById('f-msg').value.trim();
-    if (!msg) { status.textContent = form.getAttribute('data-need'); document.getElementById('f-msg').focus(); return; }
-    var name = document.getElementById('f-name').value.trim(), mail = document.getElementById('f-mail').value.trim();
-    var body = msg + (name || mail ? '\r\n\r\n--\r\n' + (name ? name + '\r\n' : '') + (mail ? mail + '\r\n' : '') : '');
-    var subject = form.getAttribute('data-prefix') + label(subj), to = form.getAttribute('data-to');
-    var q = 'to=' + encodeURIComponent(to) + '&subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body);
-    var how = e.submitter && e.submitter.value ? e.submitter.value : 'outlook';
-    status.textContent = '';
-    if (how === 'mailto') { window.location.href = 'mailto:' + to + '?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(body); return; }
-    var base = how === 'live' ? 'https://outlook.live.com/mail/0/deeplink/compose?' : 'https://outlook.office.com/mail/deeplink/compose?';
-    var w = window.open(base + q, '_blank', 'noopener,noreferrer'); if (!w) status.textContent = form.getAttribute('data-blocked');
+    if (send.disabled) return;
+    if (subj.value === 'security') { say('sec'); return; }
+    var msgEl = document.getElementById('f-msg'), msg = msgEl.value.trim();
+    if (!msg) { say('need'); msgEl.focus(); return; }
+    var payload = { name: document.getElementById('f-name').value.trim(), email: document.getElementById('f-mail').value.trim(), subject: subj.value, message: msg, hp: document.getElementById('f-web').value };
+    send.disabled = true; send.setAttribute('aria-disabled', 'true'); say('sending');
+    var done = function (ok) {
+      send.disabled = false; send.removeAttribute('aria-disabled');
+      if (ok) { form.reset(); sync(); say('sent'); } else { say('err'); }
+    };
+    fetch(form.getAttribute('data-endpoint'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), credentials: 'omit', referrerPolicy: 'no-referrer' })
+      .then(function (r) { done(r.ok); }, function () { done(false); });
   });
-  var cb = document.getElementById('copyaddr');
-  if (cb && canCopy) { cb.hidden = false; cb.addEventListener('click', function () { navigator.clipboard.writeText(form.getAttribute('data-to')).then(function () { cb.textContent = cb.getAttribute('data-copied'); setTimeout(function () { cb.textContent = cb.getAttribute('data-label'); }, 1800); }); }); }
 })();
