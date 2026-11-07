@@ -1,6 +1,6 @@
 # Sanad v0.1: an open protocol for recomputable recognition of skills
 
-Document: SANAD-SPEC-0.1 · Status: **draft for discussion** · Date: 7 November 2026 · Author: Kermani Kolankeh, Arash (steward)
+Document: SANAD-SPEC-0.1 · Status: **draft for discussion** · Date: 7 November 2026 · Author and founder: Dr. Arash Kermani Kolankeh, interim steward
 
 This draft has not been reviewed by a standards body, a lawyer or an external cryptographer. Sanad (a short word for a document and the chain of support behind it) is to be stewarded by the Open Sanad Foundation (UAE, in preparation); until it exists the author acts as interim steward. Nothing here is accreditation: Sanad practises **decentralised assessment**. It does not accredit anyone and it does not decide what a verifier must accept. A reference implementation with conformance vectors (`reference/` in the project repository) and an explainer (hosted by the Kamangir project for now) accompany this draft. The key words MUST, SHOULD and MAY are used as in RFC 2119 and RFC 8174.
 

@@ -196,3 +196,4 @@ footer.site a{hyphens:auto}
 .mailform textarea{resize:vertical;min-height:9rem}.mailform :is(input,select,textarea):focus-visible{outline:3px solid var(--focus,#1a5fb4);outline-offset:2px}
 .mailform .hp{position:absolute;inset-inline-start:-10000px;width:1px;height:1px;overflow:hidden}.formnote{font-size:.92rem;color:var(--muted)}.formnote[hidden]{display:none}
 @media (max-width:640px){.portrait{float:none;margin:0 0 var(--s3);width:9rem}}
+.spec-byline{margin:0 0 var(--s3,1rem);color:var(--muted,#44505f);font-size:.96rem}

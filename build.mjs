@@ -87,9 +87,9 @@ for (const lang of Object.keys(LANGS)) {
 {
   const src = readFileSync('spec/SPEC-v0.1.md', 'utf8');
   const title = /^# (.+)$/m.exec(src)[1];
-  let body = src.replace(/^# .+\n+/, '').replace(/^Document: .+\n+/m, '');
+  const docLine = /^Document: (.+)$/m.exec(src)?.[1] ?? ''; let body = src.replace(/^# .+\n+/, '').replace(/^Document: .+\n+/m, '');
   const parts = body.split(/\n\n/); const first = parts.shift(); const [noteHtml] = mdToHtml(first, 'en'); body = parts.join('\n\n');
-  const [html0, headings] = mdToHtml(body, 'en'); const html = `<aside class="note">${noteHtml}</aside>\n` + enhanceSpec(html0) + CITE;
+  const [html0, headings] = mdToHtml(body, 'en'); const [docHtml] = mdToHtml(docLine, 'en'); const html = `<p class="spec-byline">${docHtml.replace(/^<p>|<\/p>\s*$/g, '')}</p>\n<aside class="note">${noteHtml}</aside>\n` + enhanceSpec(html0) + CITE;
   addPage({ lang: 'en', key: 'spec-0.1', path: '/spec/0.1/', title: 'Sanad v0.1: specification (draft)', h1: title, short: 'Version 0.1', description: 'Sanad v0.1 draft: data model, recognition function, transparency log, privacy and threats of an open protocol for recomputable recognition of skills.', nav: 'spec', template: 'doc spec', toc: true, tocItems: headings, crumbs: [['Specification', '/spec/']], meta: { id: 'SANAD-SPEC-0.1', version: '0.1 (draft)' }, cover: { subtitle: 'Specification · Spezifikation' }, actions: `<ul class="actions"><li><a class="btn primary" href="/spec/SANAD-SPEC-0.1.pdf">PDF</a></li><li><a class="btn" rel="noopener" href="https://github.com/sanad-protocol/sanad/edit/main/spec/SPEC-v0.1.md">Edit on GitHub</a></li><li><a class="btn" rel="noopener" href="https://github.com/sanad-protocol/sanad/issues/new">Report an issue</a></li><li><a class="btn" href="#cite">Cite</a></li></ul>`, html,
     jsonld: { '@context': 'https://schema.org', '@type': 'TechArticle', headline: title, inLanguage: 'en', datePublished: SITE.stand, author: { '@type': 'Person', name: 'Arash Kermani Kolankeh' }, publisher: { '@type': 'Organization', name: 'Sanad', url: SITE.url }, license: 'https://creativecommons.org/licenses/by/4.0/', url: SITE.url + '/spec/0.1/' } });
 }
