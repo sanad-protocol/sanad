@@ -21,7 +21,7 @@ This statement is **voluntary**. The operator is a private individual, and the l
 ## Method and result (7 November 2026)
 
 1. **Automated check** with the axe-core engine (WCAG 2.0 to 2.2 A and AA rules and best practices) on every page of the site, in the light and the dark colour scheme and at desktop and phone width. Result: no violations reported. Automated tools find only part of all problems.
-2. **Keyboard test**, carried out with scripted keyboard input on eight representative pages (English, German, Arabic and Persian): the skip link is the first Tab stop and moves to the main content; every focus stop shows a focus ring of at least 2 pixels; there is no keyboard trap; the "More" menu opens with Enter and its links are reached with Tab; scrolling tables can be focused. Result: all checks passed.
+2. **Keyboard test**, carried out with scripted keyboard input on eight representative pages (English and German): the skip link is the first Tab stop and moves to the main content; every focus stop shows a focus ring of at least 2 pixels; there is no keyboard trap; the "More" menu opens with Enter and its links are reached with Tab; scrolling tables can be focused. Result: all checks passed.
 3. **Reflow and text spacing:** at a width of 320 pixels (equal to 400 percent zoom) no horizontal scrolling; with increased line, letter, word and paragraph spacing no content is cut off.
 4. **Contrast:** the colour pairs of both colour schemes were calculated and meet 4.5 to 1 for text and 3 to 1 for large text and graphics.
 5. **Not done:** no test with real screen readers or other assistive technology; no external audit; no test by people with disabilities.
@@ -36,7 +36,7 @@ This statement is **voluntary**. The operator is a private individual, and the l
 
 ## Known limitations
 
-- The Arabic and Persian pages are draft translations, not checked by native speakers or with screen readers in those languages.
+- The German pages are a draft translation, not checked by a native speaker or with a screen reader in German.
 - The PDF of the specification is tagged and has bookmarks and a language, but has not been tested with a screen reader.
 - Mathematical expressions and diagrams are written as text and tables.
 

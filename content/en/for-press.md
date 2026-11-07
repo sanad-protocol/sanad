@@ -19,7 +19,7 @@ crumbs: [["Who it is for","/for/"]]
 - **Who:** Dr. Arash Kermani Kolankeh, author and interim steward, Dubai. The Open Sanad Foundation (UAE) is in preparation.
 - **Status (7 November 2026):** specification draft v0.1; reference implementation and 20 test vectors; website; an explainer hosted by the Kamangir project. No independent implementation yet. No funding received.
 - **Not:** accreditation, a blockchain, a coin, a ranking of people, a replacement for legal recognition.
-- **Name:** سند (sanad), a document or chain of support. Not yet registered as a trademark.
+- **Name:** Sanad, a short word for a document and the chain of support behind it. Not yet registered as a trademark.
 
 ## What would convince us that we are wrong
 

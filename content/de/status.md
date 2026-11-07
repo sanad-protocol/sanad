@@ -24,7 +24,7 @@ description: Was Sanad heute ist, was geprüft wurde, was nicht, und was Sanad n
 - Prüfung durch eine Normungsorganisation, juristisch oder durch unabhängige Kryptografie-Fachleute.
 - Marken- und Urheberrechtseintragung (siehe [Name und Schutzrechte](/name-and-ip/)).
 - Unabhängige Implementierungen, Konformitätsprüfungen, Bestätigende außerhalb des Umfelds des Autors.
-- Prüfung der deutschen, arabischen und persischen Texte durch Muttersprachler.
+- Prüfung des deutschen Textes durch Muttersprachler.
 
 ## Was Sanad nicht behauptet
 

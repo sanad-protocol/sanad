@@ -35,6 +35,6 @@ The protocol is called Sanad. The Open Sanad Foundation is to be established in 
 
 ## 7 November 2026: website published in draft
 
-sanadprotocol.org is online in English, with draft translations in German, Arabic and Persian. It uses no cookies, no analytics and no external requests.
+sanadprotocol.org is online in English, with a draft translation in German. It uses no cookies, no analytics and no external requests.
 
 </section>

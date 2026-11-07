@@ -19,7 +19,7 @@ Diese Erklärung ist **freiwillig**. Betreiber ist eine Privatperson; die gesetz
 ## Methode und Ergebnis (7. November 2026)
 
 1. **Automatische Prüfung** mit der Engine axe-core (WCAG 2.0 bis 2.2, Regeln der Stufen A und AA und Best Practices) auf jeder Seite, im hellen und im dunklen Farbschema, in Desktop- und Smartphone-Breite. Ergebnis: keine Verstöße gemeldet. Automatische Werkzeuge finden nur einen Teil der Probleme.
-2. **Tastaturprüfung** mit skriptgesteuerter Tastatureingabe auf acht repräsentativen Seiten (Englisch, Deutsch, Arabisch, Persisch): Der Sprunglink ist der erste Tabulatorstopp und führt zum Hauptinhalt; jeder Fokus zeigt einen Fokusrahmen von mindestens 2 Pixeln; es gibt keine Tastaturfalle; das Menü „Mehr“ lässt sich mit der Eingabetaste öffnen, seine Links sind mit Tab erreichbar; scrollende Tabellen sind fokussierbar. Ergebnis: alle Prüfungen bestanden.
+2. **Tastaturprüfung** mit skriptgesteuerter Tastatureingabe auf acht repräsentativen Seiten (Englisch und Deutsch): Der Sprunglink ist der erste Tabulatorstopp und führt zum Hauptinhalt; jeder Fokus zeigt einen Fokusrahmen von mindestens 2 Pixeln; es gibt keine Tastaturfalle; das Menü „Mehr“ lässt sich mit der Eingabetaste öffnen, seine Links sind mit Tab erreichbar; scrollende Tabellen sind fokussierbar. Ergebnis: alle Prüfungen bestanden.
 3. **Umbruch und Textabstände:** bei 320 Pixeln Breite (entspricht 400 Prozent Zoom) kein horizontales Scrollen; bei vergrößerten Zeilen-, Buchstaben-, Wort- und Absatzabständen wird kein Inhalt abgeschnitten.
 4. **Kontrast:** Die Farbpaare beider Farbschemata wurden berechnet und erreichen 4,5 zu 1 für Text und 3 zu 1 für große Schrift und Grafiken.
 5. **Nicht durchgeführt:** kein Test mit echten Screenreadern oder anderen assistiven Technologien, keine externe Prüfung, kein Test durch Menschen mit Behinderungen.
@@ -34,7 +34,7 @@ Diese Erklärung ist **freiwillig**. Betreiber ist eine Privatperson; die gesetz
 
 ## Bekannte Einschränkungen
 
-- Die arabischen und persischen Seiten sind Übersetzungsentwürfe, nicht von Muttersprachlern oder mit Screenreadern in diesen Sprachen geprüft.
+- Die deutschen Seiten sind ein Übersetzungsentwurf, nicht von Muttersprachlern oder mit Screenreadern geprüft.
 - Das PDF der Spezifikation ist ausgezeichnet (Tags), hat Lesezeichen und eine Sprachangabe, wurde aber nicht mit einem Screenreader getestet.
 - Formeln und Diagramme sind als Text und Tabellen gesetzt.
 

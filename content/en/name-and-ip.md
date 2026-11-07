@@ -9,16 +9,14 @@ toc: true
 ---
 
 <!-- glance -->
-- **Sanad** (سند): a document, a support, the chain by which knowledge is handed on.
+- **Sanad**: a short word for a document and the chain of support behind it.
 - Nothing is registered yet. The plan: trademark for the name, a dated copyright deposit, **no patents**.
 - Text CC BY 4.0; code Apache-2.0.
 <!-- /glance -->
 
 ## The name
 
-Sanad (Arabic and Persian سند, also used in Urdu; Turkish *senet*) means a document, a support, and the chain by which knowledge is handed on from teacher to student. That is what the protocol records: a chain from a claim through evidence to independent attestors. The word is short, easy to pronounce in the languages of the people the project is meant to serve, and not tied to any company.
-
-In Islamic scholarship *isnad* is the chain of narrators of a report. Here the word is used in its general sense of a chain of support.
+Sanad stands for a document and the chain of support behind it, the chain by which knowledge is handed on. That is what the protocol records: a chain from a claim through evidence to independent attestors. The word is short, easy to pronounce in many languages, and not tied to any company or to any one language or culture.
 
 ## Clearance status
 
