@@ -24,6 +24,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --ignore-scripts
+      - run: npm run reference:build
       - run: node build.mjs
       # The PDF of the specification is committed (spec/SANAD-SPEC-0.1.pdf) and copied by build.mjs; rebuild it when Chrome is available.
       - name: Rebuild the PDF if Chrome is available
