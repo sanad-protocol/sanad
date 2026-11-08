@@ -25,7 +25,7 @@ Diese Website wird von einer natürlichen Person betrieben. Sie ist **noch keine
 
 ## Inhalt und Haftung
 
-Die Inhalte sind ein Entwurf zur Diskussion und werden ohne Gewähr bereitgestellt. Sie sind weder Rechts-, Finanz- noch Fachberatung und weder Akkreditierung noch Zertifizierung. Der Betreiber prüft die Inhalte sorgfältig, kann aber nicht gewährleisten, dass sie vollständig und fehlerfrei sind. Für Inhalte externer Links sind deren Betreiber verantwortlich; der Betreiber hat keinen Einfluss darauf und hatte beim Setzen der Links keine Kenntnis von rechtswidrigen Inhalten. Wenn Ihnen etwas auffällt, schreiben Sie an die oben genannte Adresse.
+Die Inhalte werden ohne Gewähr bereitgestellt. Sie sind weder Rechts-, Finanz- noch Fachberatung und weder Akkreditierung noch Zertifizierung. Der Betreiber prüft die Inhalte sorgfältig, kann aber nicht gewährleisten, dass sie vollständig und fehlerfrei sind. Für Inhalte externer Links sind deren Betreiber verantwortlich; der Betreiber hat keinen Einfluss darauf und hatte beim Setzen der Links keine Kenntnis von rechtswidrigen Inhalten. Wenn Ihnen etwas auffällt, schreiben Sie an die oben genannte Adresse.
 
 ## Schutzrechte
 

@@ -32,7 +32,7 @@ Beiträge werden nach dem Developer Certificate of Origin bestätigt (Zeile „S
 
 ## Normung
 
-Der geplante Weg: öffentlicher Entwurf, Referenzimplementierung, Konformitätstest, mindestens drei unabhängige Implementierende, dann eine W3C Community Group (die Gründung ist kostenlos und braucht fünf Unterstützende) und später eine Arbeitsgruppe oder Vergleichbares. Sanad erklärt sich nicht selbst zum Standard; das tut die Anwendung.
+Der geplante Weg: öffentliche Spezifikation, Referenzimplementierung, Konformitätstest, mindestens drei unabhängige Implementierende, dann eine W3C Community Group (die Gründung ist kostenlos und braucht fünf Unterstützende) und später eine Arbeitsgruppe oder Vergleichbares. Sanad erklärt sich nicht selbst zum Standard; das tut die Anwendung.
 
 ## Sicherheit
 

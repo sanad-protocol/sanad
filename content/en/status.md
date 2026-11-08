@@ -4,19 +4,19 @@ lang: en
 path: /status/
 nav: status
 title: Status and limits
-description: What Sanad is today, what has been reviewed, what has not, and what it does not claim.
+description: What Sanad is today, what exists, and what it does not claim.
 ---
 
 <!-- glance -->
-- Draft v0.1. Not reviewed by a standards body, a lawyer or an external cryptographer.
+- Version 0.1.
 - No accreditation. No token. No ranking of people.
 - One steward for now; a foundation in the United Arab Emirates is in preparation.
 <!-- /glance -->
 
 ## What exists today
 
-- A [draft specification](/spec/0.1/) (SANAD-SPEC-0.1): data model, canonical hashing, the recognition function (rules R1 to R8), transparency log, privacy and discovery, threats, governance and open questions.
-- This website, in English with draft translations.
+- A [specification](/spec/0.1/) (SANAD-SPEC-0.1): data model, canonical hashing, the recognition function (rules R1 to R8), transparency log, privacy and discovery, threats, governance and open questions.
+- This website, in English and German.
 - A reference implementation with 20 conformance vectors, and an interactive explainer hosted by the Kamangir project for now.
 
 ## What has not been done

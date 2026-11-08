@@ -5,7 +5,7 @@ path: /
 template: home
 title: Sanad: an open protocol for recomputable recognition of skills
 h1: Sanad: an open protocol for recomputable recognition of skills
-description: Sanad is a draft open protocol. A qualification is a chain of claim, evidence and signed attestations that anyone can recompute under their own policy. No token, not accreditation.
+description: Sanad is an open protocol. A qualification is a chain of claim, evidence and signed attestations that anyone can recompute under their own policy. No token, not accreditation.
 lead: Sanad specifies a data model for claims, evidence and attestations, a deterministic recognition function that a verifier runs under its own policy, and a conformance suite with a reference implementation.
 ---
 
@@ -20,7 +20,7 @@ lead: Sanad specifies a data model for claims, evidence and attestations, a dete
 - **What:** a data model and a deterministic recognition function for skills, with a public explanation for every result.
 - **Who decides:** the verifier. Each employer, school or university applies its own published policy to the same evidence.
 - **What it is not:** not a coin, not a ranking of people, not accreditation.
-- **Status:** draft v0.1 for discussion. A reference implementation and 20 test vectors are published. Run by one person for now; a second steward is being appointed. See [Status and limits](/status/).
+- **Status:** version 0.1, open for comment. A reference implementation and 20 test vectors are published. Run by one person for now; a second steward is being appointed. See [Status and limits](/status/).
 <!-- /glance -->
 
 ## The problem
@@ -53,7 +53,7 @@ Many people can do things they cannot prove. Papers are lost, institutions close
 
 ### Status
 
-Sanad is a **draft (v0.1)** for discussion. It has not been reviewed by a standards body, a lawyer or an external cryptographer. It uses **decentralised assessment**: it does not accredit anyone and does not decide what a verifier must accept. It has **no token** and no financial component. Until the Open Sanad Foundation (UAE) exists, the author, Dr. Arash Kermani Kolankeh, acts as interim steward; a second steward is being appointed, and the [governance charter](/governance/) limits what a single steward may do.
+Sanad (v0.1) uses **decentralised assessment**: it does not accredit anyone and does not decide what a verifier must accept. It has **no token** and no financial component. Until the Open Sanad Foundation (UAE) exists, the author, Dr. Arash Kermani Kolankeh, acts as interim steward; a second steward is being appointed, and the [governance charter](/governance/) limits what a single steward may do.
 
 </div>
 

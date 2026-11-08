@@ -8,7 +8,7 @@ description: Versions of the Sanad specification, with a rendered text and a PDF
 ---
 
 <!-- glance -->
-- Current version: **0.1 (draft)**, 7 November 2026.
+- Current version: **0.1**, 7 November 2026.
 - Each version has a permanent address and is frozen once published.
 - The text is licensed under CC BY 4.0; reference code under Apache-2.0.
 <!-- /glance -->
@@ -17,7 +17,7 @@ description: Versions of the Sanad specification, with a rendered text and a PDF
 
 | Version | Status | Date | Formats |
 |---|---|---|---|
-| **0.1** | Draft for discussion | 7 November 2026 | [HTML](/spec/0.1/) · [PDF](/spec/SANAD-SPEC-0.1.pdf) |
+| **0.1** | Open for comment | 7 November 2026 | [HTML](/spec/0.1/) · [PDF](/spec/SANAD-SPEC-0.1.pdf) |
 
 ## Contents of version 0.1
 
@@ -37,7 +37,7 @@ description: Versions of the Sanad specification, with a rendered text and a PDF
 
 ## Citing
 
-Kermani Kolankeh, Arash: *Sanad v0.1: an open protocol for recomputable recognition of skills*. SANAD-SPEC-0.1, draft, 7 November 2026. https://sanadprotocol.org/spec/0.1/
+Kermani Kolankeh, Arash: *Sanad v0.1: an open protocol for recomputable recognition of skills*. SANAD-SPEC-0.1, 7 November 2026. https://sanadprotocol.org/spec/0.1/
 
 ## Source and archive
 

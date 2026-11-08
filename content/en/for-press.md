@@ -10,14 +10,14 @@ crumbs: [["Who it is for","/for/"]]
 
 <!-- glance -->
 - Contact: press@sanadprotocol.org.
-- Draft v0.1; not accreditation; no token; one steward, a second steward being appointed.
+- Version 0.1; not accreditation; no token; one steward, a second steward being appointed.
 <!-- /glance -->
 
 ## Fact sheet
 
 - **Subject:** an open protocol for recomputable recognition of skills. A claim, typed evidence and signed attestations form a chain; a verifier runs a published function under its own policy and obtains a status, a level, a confidence and an ordered explanation.
 - **Steward:** Dr. Arash Kermani Kolankeh, author and interim steward, Dubai. The Open Sanad Foundation (UAE) is in preparation.
-- **Status (7 November 2026):** specification draft v0.1; reference implementation with 20 conformance vectors; website; an explainer hosted by the Kamangir project. No independent implementation. No funding received.
+- **Status (7 November 2026):** specification v0.1; reference implementation with 20 conformance vectors; website; an explainer hosted by the Kamangir project. No independent implementation. No funding received.
 - **Not:** accreditation, a blockchain, a token, a ranking of persons, a substitute for legal recognition.
 - **Name:** “sanad” is a word meaning a document or chain of support. Not yet registered as a trademark.
 
@@ -31,4 +31,4 @@ crumbs: [["Who it is for","/for/"]]
 
 ## Quoting
 
-Sanad is a draft with one steward. It makes no claim of endorsements, partners or users.
+Sanad has one steward. It makes no claim of endorsements, partners or users.

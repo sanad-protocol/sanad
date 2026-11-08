@@ -36,7 +36,6 @@ This statement is **voluntary**. The operator is a private individual, and the l
 
 ## Known limitations
 
-- The German pages are a draft translation, not checked by a native speaker or with a screen reader in German.
 - The PDF of the specification is tagged and has bookmarks and a language, but has not been tested with a screen reader.
 - Mathematical expressions and diagrams are written as text and tables.
 

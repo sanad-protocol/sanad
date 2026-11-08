@@ -54,14 +54,14 @@ function enhanceSpec(html) {
   }).join('');
 }
 const CITE = `<section class="cite" id="cite" aria-labelledby="cite-h"><h2 id="cite-h">Cite this specification</h2>
-<p>Kermani Kolankeh, Arash: <em>Sanad v0.1: an open protocol for recomputable recognition of skills</em>. SANAD-SPEC-0.1, draft, 7 November 2026. <a href="https://sanadprotocol.org/spec/0.1/">https://sanadprotocol.org/spec/0.1/</a></p>
+<p>Kermani Kolankeh, Arash: <em>Sanad v0.1: an open protocol for recomputable recognition of skills</em>. SANAD-SPEC-0.1, 7 November 2026. <a href="https://sanadprotocol.org/spec/0.1/">https://sanadprotocol.org/spec/0.1/</a></p>
 <h3>BibTeX</h3><pre><code>@misc{sanad-spec-0.1,
   author       = {Kermani Kolankeh, Arash},
   title        = {Sanad v0.1: an open protocol for recomputable recognition of skills},
   year         = {2026},
   month        = nov,
   howpublished = {\\url{https://sanadprotocol.org/spec/0.1/}},
-  note         = {SANAD-SPEC-0.1, draft}
+  note         = {SANAD-SPEC-0.1}
 }</code></pre>
 <h3>CITATION.cff</h3><p class="small">The repository carries a <a href="https://github.com/sanad-protocol/sanad/blob/main/CITATION.cff" rel="noopener" class="ext">CITATION.cff</a> file with the same data.</p></section>`;
 
@@ -90,11 +90,11 @@ for (const lang of Object.keys(LANGS)) {
   const docLine = /^Document: (.+)$/m.exec(src)?.[1] ?? ''; let body = src.replace(/^# .+\n+/, '').replace(/^Document: .+\n+/m, '');
   const parts = body.split(/\n\n/); const first = parts.shift(); const [noteHtml] = mdToHtml(first, 'en'); body = parts.join('\n\n');
   const [html0, headings] = mdToHtml(body, 'en'); const [docHtml] = mdToHtml(docLine, 'en'); const html = `<p class="spec-byline">${docHtml.replace(/^<p>|<\/p>\s*$/g, '')}</p>\n<aside class="note">${noteHtml}</aside>\n` + enhanceSpec(html0) + CITE;
-  addPage({ lang: 'en', key: 'spec-0.1', path: '/spec/0.1/', title: 'Sanad v0.1: specification (draft)', h1: title, short: 'Version 0.1', description: 'Sanad v0.1 draft: data model, recognition function, transparency log, privacy and threats of an open protocol for recomputable recognition of skills.', nav: 'spec', template: 'doc spec', toc: true, tocItems: headings, crumbs: [['Specification', '/spec/']], meta: { id: 'SANAD-SPEC-0.1', version: '0.1 (draft)' }, cover: { subtitle: 'Specification · Spezifikation' }, actions: `<ul class="actions"><li><a class="btn primary" href="/spec/SANAD-SPEC-0.1.pdf">PDF</a></li><li><a class="btn" rel="noopener" href="https://github.com/sanad-protocol/sanad/edit/main/spec/SPEC-v0.1.md">Edit on GitHub</a></li><li><a class="btn" rel="noopener" href="https://github.com/sanad-protocol/sanad/issues/new">Report an issue</a></li><li><a class="btn" href="#cite">Cite</a></li></ul>`, html,
+  addPage({ lang: 'en', key: 'spec-0.1', path: '/spec/0.1/', title: 'Sanad v0.1: specification', h1: title, short: 'Version 0.1', description: 'Sanad v0.1: data model, recognition function, transparency log, privacy and threats of an open protocol for recomputable recognition of skills.', nav: 'spec', template: 'doc spec', toc: true, tocItems: headings, crumbs: [['Specification', '/spec/']], meta: { id: 'SANAD-SPEC-0.1', version: '0.1' }, cover: { subtitle: 'Specification · Spezifikation' }, actions: `<ul class="actions"><li><a class="btn primary" href="/spec/SANAD-SPEC-0.1.pdf">PDF</a></li><li><a class="btn" rel="noopener" href="https://github.com/sanad-protocol/sanad/edit/main/spec/SPEC-v0.1.md">Edit on GitHub</a></li><li><a class="btn" rel="noopener" href="https://github.com/sanad-protocol/sanad/issues/new">Report an issue</a></li><li><a class="btn" href="#cite">Cite</a></li></ul>`, html,
     jsonld: { '@context': 'https://schema.org', '@type': 'TechArticle', headline: title, inLanguage: 'en', datePublished: SITE.stand, author: { '@type': 'Person', name: 'Arash Kermani Kolankeh' }, publisher: { '@type': 'Organization', name: 'Sanad', url: SITE.url }, license: 'https://creativecommons.org/licenses/by/4.0/', url: SITE.url + '/spec/0.1/' } });
 }
 // home gets Organization JSON-LD
-for (const p of pages) if (p.path === '/' ) p.jsonld = { '@context': 'https://schema.org', '@type': 'Organization', name: 'Sanad', url: SITE.url, description: 'An open protocol for recomputable recognition of skills (draft).', logo: SITE.url + '/assets/logo-color.svg', founder: { '@type': 'Person', name: 'Arash Kermani Kolankeh' } };
+for (const p of pages) if (p.path === '/' ) p.jsonld = { '@context': 'https://schema.org', '@type': 'Organization', name: 'Sanad', url: SITE.url, description: 'An open protocol for recomputable recognition of skills.', logo: SITE.url + '/assets/logo-color.svg', founder: { '@type': 'Person', name: 'Arash Kermani Kolankeh' } };
 
 // ---- home pages (generated from real data)
 const vectorsData = JSON.parse(readFileSync('reference/vectors.json', 'utf8'));

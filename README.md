@@ -1,6 +1,6 @@
 # sanadprotocol.org
 
-Source of the website of **Sanad**, an open protocol for recomputable recognition of skills (draft v0.1). Live site: <https://sanadprotocol.org>.
+Source of the website of **Sanad**, an open protocol for recomputable recognition of skills (v0.1). Live site: <https://sanadprotocol.org>.
 
 Sanad is not accreditation and has no token. The specification, the governance charter and the plan for the Open Sanad Foundation (United Arab Emirates, in preparation) are published on the site. Until the foundation exists, Dr. Arash Kermani Kolankeh acts as interim steward.
 
@@ -31,7 +31,7 @@ node reference/verify.mjs   # runs the conformance vectors
 
 ## Principles of the site
 
-No cookies, no analytics, no third-party requests (a strict content security policy enforces this), WCAG 2.2 AA as the target, English first with draft translations that are marked as such, and no claim that is not yet true.
+No cookies, no analytics, no third-party requests (a strict content security policy enforces this), WCAG 2.2 AA as the target, English first with a German translation, and no claim that is not yet true.
 
 ## Licences
 

@@ -34,7 +34,6 @@ Diese Erklärung ist **freiwillig**. Betreiber ist eine Privatperson; die gesetz
 
 ## Bekannte Einschränkungen
 
-- Die deutschen Seiten sind ein Übersetzungsentwurf, nicht von Muttersprachlern oder mit Screenreadern geprüft.
 - Das PDF der Spezifikation ist ausgezeichnet (Tags), hat Lesezeichen und eine Sprachangabe, wurde aber nicht mit einem Screenreader getestet.
 - Formeln und Diagramme sind als Text und Tabellen gesetzt.
 

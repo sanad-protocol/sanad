@@ -32,7 +32,7 @@ Contributions are signed off under the Developer Certificate of Origin (a line "
 
 ## Standardisation
 
-The planned route is a public draft, a reference implementation, a conformance suite, at least three independent implementers, then a W3C Community Group (creation is free and needs five supporters) and later a Working Group or an equivalent. Sanad does not declare itself a standard; adoption does.
+The planned route is a public specification, a reference implementation, a conformance suite, at least three independent implementers, then a W3C Community Group (creation is free and needs five supporters) and later a Working Group or an equivalent. Sanad does not declare itself a standard; adoption does.
 
 ## Security
 

@@ -5,7 +5,7 @@ path: /de/
 template: home
 title: Sanad: ein offenes Protokoll zur nachrechenbaren Anerkennung von Fähigkeiten
 h1: Sanad: ein offenes Protokoll zur nachrechenbaren Anerkennung von Fähigkeiten
-description: Sanad ist ein Protokoll im Entwurfsstadium. Eine Qualifikation ist eine Kette aus Behauptung, Nachweisen und signierten Bestätigungen, die jede Stelle nach eigener Richtlinie nachrechnen kann. Kein Token, keine Akkreditierung.
+description: Sanad ist ein offenes Protokoll. Eine Qualifikation ist eine Kette aus Behauptung, Nachweisen und signierten Bestätigungen, die jede Stelle nach eigener Richtlinie nachrechnen kann. Kein Token, keine Akkreditierung.
 lead: Sanad legt ein Datenmodell für Behauptungen, Nachweise und Bestätigungen fest, eine deterministische Anerkennungsfunktion, die eine prüfende Stelle nach ihrer eigenen Richtlinie ausführt, und eine Konformitätsprüfung mit Referenzimplementierung.
 ---
 
@@ -19,7 +19,7 @@ lead: Sanad legt ein Datenmodell für Behauptungen, Nachweise und Bestätigungen
 - **Was:** ein Datenmodell und eine deterministische Anerkennungsfunktion für Fähigkeiten, die zu jedem Ergebnis eine öffentliche Begründung liefert.
 - **Wer entscheidet:** die prüfende Stelle. Jedes Unternehmen, jede Schule und jede Hochschule wendet auf dieselben Nachweise ihre eigene veröffentlichte Richtlinie an.
 - **Was Sanad nicht ist:** keine Währung, keine Rangliste von Personen, keine Akkreditierung.
-- **Stand:** Entwurf 0.1 zur Diskussion; vorerst von einer Person betreut. Siehe [Status und Grenzen](/de/status/).
+- **Stand:** Version 0.1, offen für Anmerkungen; vorerst von einer Person betreut. Siehe [Status und Grenzen](/de/status/).
 <!-- /glance -->
 
 ## Das Problem
@@ -41,14 +41,14 @@ Viele Menschen können etwas, das sie nicht belegen können. Zeugnisse gehen ver
 <div><h3>Lernende ohne übertragbare Nachweise</h3><p>Menschen, deren Studium oder Arbeit dort, wo sie sind, nicht anerkannt wird, können überprüfbare Nachweise mitführen, die nicht von einer einzelnen Einrichtung abhängen.</p></div>
 <div><h3>Prüfende und Bestätigende</h3><p>Jede und jeder darf bestätigen. Die Zahl der Sitzungen und die Übereinstimmung mit anderen Prüfenden sind öffentlich und nachrechenbar.</p></div>
 <div><h3>Hochschulen und Unternehmen</h3><p>Prüfende Stellen wählen ihre Richtlinie, zum Beispiel drei Bestätigende und eine Präsenzsitzung, und können genau darlegen, wie ein Ergebnis zustande kam.</p></div>
-<div><h3>Entwickelnde</h3><p>Spezifikation, Konformitätsvektoren und Referenzcode sind offen. Unabhängige Implementierungen machen aus einem Entwurf einen Standard.</p></div>
+<div><h3>Entwickelnde</h3><p>Spezifikation, Konformitätsvektoren und Referenzcode sind offen. Unabhängige Implementierungen machen aus einer Spezifikation einen Standard.</p></div>
 </div>
 
 <div class="status-box">
 
 ### Status
 
-Sanad ist ein **Entwurf (Version 0.1)** zur Diskussion. Er wurde weder von einer Normungsorganisation noch von juristischer oder kryptografischer Seite unabhängig geprüft. Sanad beruht auf **dezentraler Bewertung**: Es akkreditiert niemanden und bestimmt nicht, was eine prüfende Stelle akzeptieren muss. Es gibt **kein Token** und keine finanzielle Komponente. Bis die Open Sanad Foundation (VAE) besteht, handelt der Autor, Dr. Arash Kermani Kolankeh, als kommissarischer Verantwortlicher; eine zweite verantwortliche Person wird gewonnen; die [Governance-Charta](/governance/) begrenzt, was eine einzelne Person tun darf.
+Sanad (Version 0.1) beruht auf **dezentraler Bewertung**: Es akkreditiert niemanden und bestimmt nicht, was eine prüfende Stelle akzeptieren muss. Es gibt **kein Token** und keine finanzielle Komponente. Bis die Open Sanad Foundation (VAE) besteht, handelt der Autor, Dr. Arash Kermani Kolankeh, als kommissarischer Verantwortlicher; eine zweite verantwortliche Person wird gewonnen; die [Governance-Charta](/governance/) begrenzt, was eine einzelne Person tun darf.
 
 </div>
 

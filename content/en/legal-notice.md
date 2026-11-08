@@ -25,7 +25,7 @@ This website is operated by an individual. It is **not yet a registered organisa
 
 ## Content and liability
 
-The content is a draft for discussion and is provided without warranty. It is not legal, financial or professional advice and it is neither an accreditation nor a certification. The operator checks the content with care but cannot guarantee that it is complete or free of errors. External links lead to third-party content for which their operators are responsible; the operator has no influence on it and had no knowledge of unlawful content when the link was set. If you notice a problem, write to the address above.
+The content is provided without warranty. It is not legal, financial or professional advice and it is neither an accreditation nor a certification. The operator checks the content with care but cannot guarantee that it is complete or free of errors. External links lead to third-party content for which their operators are responsible; the operator has no influence on it and had no knowledge of unlawful content when the link was set. If you notice a problem, write to the address above.
 
 ## Intellectual property
 

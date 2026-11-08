@@ -6,7 +6,7 @@ nav: ipr
 title: Intellectual property policy
 description: Licences, patent commitment, trademark and conformance mark policy, and contribution terms of Sanad.
 docid: SANAD-IPR-0.1
-version: 0.1 (draft)
+version: 0.1
 toc: true
 numbered: true
 ---

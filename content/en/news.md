@@ -17,11 +17,11 @@ The repository now contains a reference implementation of the recognition functi
 
 </section>
 
-<section id="2026-11-07-draft">
+<section id="2026-11-07-spec">
 
-## 7 November 2026: specification draft v0.1 prepared
+## 7 November 2026: specification v0.1 published
 
-The first draft of the Sanad specification (data model, recognition function, transparency log, privacy and threats) has been written and is open for discussion. It has not been reviewed by a standards body, a lawyer or an external cryptographer. See the [specification](/spec/0.1/).
+The first version of the Sanad specification (data model, recognition function, transparency log, privacy and threats) is published and open for comment. See the [specification](/spec/0.1/).
 
 </section>
 <section id="2026-11-07-name">
@@ -33,8 +33,8 @@ The protocol is called Sanad. The Open Sanad Foundation is to be established in 
 </section>
 <section id="2026-11-07-site">
 
-## 7 November 2026: website published in draft
+## 7 November 2026: website published
 
-sanadprotocol.org is online in English, with a draft translation in German. It uses no cookies, no analytics and no external requests.
+sanadprotocol.org is online in English and German. It uses no cookies, no analytics and no external requests.
 
 </section>

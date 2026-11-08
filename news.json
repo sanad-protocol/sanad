@@ -6,10 +6,10 @@
     "summary": "The repository contains a dependency-free reference implementation, 15 recognition vectors and 5 inference vectors, and a command-line verifier (node reference/verify.mjs)."
   },
   {
-    "id": "2026-11-07-draft",
+    "id": "2026-11-07-spec",
     "date": "2026-11-07",
-    "title": "Specification draft v0.1 prepared",
-    "summary": "The first draft of the Sanad specification (data model, recognition function, transparency log, privacy and threats) has been written and is open for discussion. It has not been reviewed by a standards body, a lawyer or an external cryptographer."
+    "title": "Specification v0.1 published",
+    "summary": "The first version of the Sanad specification (data model, recognition function, transparency log, privacy and threats) is published and open for comment."
   },
   {
     "id": "2026-11-07-name",
@@ -20,7 +20,7 @@
   {
     "id": "2026-11-07-site",
     "date": "2026-11-07",
-    "title": "Website published in draft",
-    "summary": "sanadprotocol.org is online in English, with a draft translation in German. It uses no cookies, no analytics and no external requests."
+    "title": "Website published",
+    "summary": "sanadprotocol.org is online in English and German. It uses no cookies, no analytics and no external requests."
   }
 ]

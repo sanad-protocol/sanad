@@ -13,9 +13,9 @@ crumbs: [["Who it is for","/for/"]]
 - No partners are named until they have agreed in writing.
 <!-- /glance -->
 
-Sanad is a one-person start with a public draft, a working reference implementation and a plan. The [Support page](/support/) lists the known costs, what a grant would add, the roles needed and the risks.
+Sanad is a one-person start with a public specification, a working reference implementation and a plan. The [Support page](/support/) lists the known costs, what a grant would add, the roles needed and the risks.
 
-- What exists: the specification draft, 20 test vectors, the reference code, this site, an explainer.
+- What exists: the specification, 20 test vectors, the reference code, this site, an explainer.
 - What is missing: a second steward, a legal entity, a trademark, independent implementations, reviews.
 - What support would change: speed and independence, not the design. The design is open and free.
 

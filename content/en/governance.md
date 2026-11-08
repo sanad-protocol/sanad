@@ -6,7 +6,7 @@ nav: governance
 title: Governance charter
 description: How Sanad is governed during its one-person start: mission lock, safeguards against capture, sunset clause, succession and funding.
 docid: SANAD-GOV-0.1
-version: 0.1 (draft)
+version: 0.1
 toc: true
 numbered: true
 ---
@@ -53,7 +53,7 @@ A one-person start is a risk to the credibility of any standard. These rules red
 
 ## Sunset clause
 
-Before version 1.0 there must be at least **three independent stewards from at least two regions**. The steward then becomes one steward among equals. If this has not happened by **31 December 2028**, the specification remains marked draft and the steward will transfer the name and domains to a neutral host chosen by the stewards.
+Before version 1.0 there must be at least **three independent stewards from at least two regions**. The steward then becomes one steward among equals. If this has not happened by **31 December 2028**, the specification remains at its current version and the steward will transfer the name and domains to a neutral host chosen by the stewards.
 
 ## Name and conformance mark
 

@@ -6,7 +6,7 @@ nav: conformance
 title: Conformance
 description: Conformance classes of Sanad, the public test vectors and the reference verifier.
 docid: SANAD-CONF-0.1
-version: 0.1 (draft)
+version: 0.1
 toc: true
 numbered: true
 ---

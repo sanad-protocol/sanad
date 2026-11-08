@@ -160,7 +160,7 @@ footer.site h2{font-size:.72rem;text-transform:uppercase;letter-spacing:.11em;co
 .print-cover{display:none}
 @media (max-width:640px){header.site .bar{padding-block:.55rem}.logo{height:26px}.hero{padding-block:var(--s5) var(--s6)}.band{padding-block:var(--s6)}}
 @media print{
-  @page{size:A4;margin:22mm 18mm 24mm;@bottom-left{content:"SANAD · Entwurf / Draft";font:8pt Helvetica,Arial,sans-serif;color:#555}@bottom-right{content:counter(page) " / " counter(pages);font:8pt Helvetica,Arial,sans-serif;color:#555}}
+  @page{size:A4;margin:22mm 18mm 24mm;@bottom-left{content:"SANAD · v0.1";font:8pt Helvetica,Arial,sans-serif;color:#555}@bottom-right{content:counter(page) " / " counter(pages);font:8pt Helvetica,Arial,sans-serif;color:#555}}
   @page :first{margin:0;@bottom-left{content:none}@bottom-right{content:none}}
   :root{--navy:#003B73;--ink:#000;--muted:#333;--line:#999;--line-soft:#ccc;--bg:#fff;--band:#fff;--tint:#fff;--link:#000;--accent:#003B73}
   html{font-size:10.5pt}body{background:#fff;color:#000}

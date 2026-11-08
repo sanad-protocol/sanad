@@ -8,14 +8,14 @@ description: Was Sanad heute ist, was geprüft wurde, was nicht, und was Sanad n
 ---
 
 <!-- glance -->
-- Entwurf 0.1. Nicht durch eine Normungsorganisation, juristisch oder kryptografisch unabhängig geprüft.
+- Version 0.1.
 - Keine Akkreditierung. Kein Token. Keine Rangliste von Personen.
 - Vorerst eine verantwortliche Person; eine Stiftung in den Vereinigten Arabischen Emiraten ist in Vorbereitung.
 <!-- /glance -->
 
 ## Was es heute gibt
 
-- Einen [Spezifikationsentwurf](/spec/0.1/) (SANAD-SPEC-0.1, englisch): Datenmodell, kanonische Hashes, die Anerkennungsfunktion (Regeln R1 bis R8), Transparenzprotokoll, Datenschutz und Auffindbarkeit, Bedrohungen, Governance und offene Fragen.
+- Eine [Spezifikation](/spec/0.1/) (SANAD-SPEC-0.1, englisch): Datenmodell, kanonische Hashes, die Anerkennungsfunktion (Regeln R1 bis R8), Transparenzprotokoll, Datenschutz und Auffindbarkeit, Bedrohungen, Governance und offene Fragen.
 - Diese Website auf Englisch mit Übersetzungsentwürfen.
 - Eine Referenzimplementierung und eine interaktive Erklärseite sind in Vorbereitung.
 

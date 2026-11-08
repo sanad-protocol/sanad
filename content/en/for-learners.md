@@ -29,6 +29,6 @@ Prerequisite skills that follow from a demonstrated skill are listed as **inferr
 
 ## Limits
 
-Sanad does not rank holders and does not decide what a university or employer must accept. It is a draft; no sittings under it are offered yet.
+Sanad does not rank holders and does not decide what a university or employer must accept. No sittings under it are offered yet.
 
 **Next step:** read the [questions and clarifications](/faq/) and section 10 of the [specification](/spec/0.1/) on privacy and disclosure.
