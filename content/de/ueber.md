@@ -2,7 +2,7 @@
 key: about
 lang: de
 path: /de/ueber/
-title: Der Verantwortliche
+title: Über Sanad
 description: Wer Sanad betreut: Hintergrund des kommissarischen Verantwortlichen und Rolle im Projekt.
 ---
 

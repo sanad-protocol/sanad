@@ -2,8 +2,8 @@
 key: about
 lang: en
 path: /about/
-title: The steward
-description: Who maintains Sanad: background of the interim steward and the role in the project.
+title: About
+description: About Sanad: who maintains it, the background of the interim steward and the role in the project.
 ---
 
 <figure class="portrait"><img src="/assets/arash.jpg" width="240" height="320" alt="Portrait of Dr. Arash Kermani Kolankeh" loading="lazy" decoding="async"></figure>
