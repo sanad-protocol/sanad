@@ -17,6 +17,10 @@ description: An interactive page that shows a sample credential as a chain and l
 
 The explainer is a page of the Kamangir project, which wrote the reference code: <a href="https://kamangir.school/en/recognition/">kamangir.school/en/recognition/</a>. It is **hosted by the Kamangir project for now** and runs the same recognition function that the conformance vectors test, in your browser, with invented data. It may be unavailable until the host site has been updated. A copy under this domain is planned.
 
+## The check in pictures
+
+<!-- diagram:verify,tamper -->
+
 ## What it shows
 
 - **The chain:** each node shows its hash and the rule that used it.

@@ -43,11 +43,34 @@ for (const need of ['robots.txt', '.well-known/security.txt', 'humans.txt', 'CNA
 // 5. contrast of the palette (WCAG 2.2: 4.5 text, 3 for large text and graphics)
 const lum = (h) => { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
 const cr = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
-const PAIRS = [['light text', '#16202D', '#FFFFFF', 4.5], ['light text on band', '#16202D', '#F4F6F9', 4.5], ['light muted on white', '#4A5668', '#FFFFFF', 4.5], ['light muted on band', '#4A5668', '#F4F6F9', 4.5], ['light muted on tint', '#4A5668', '#EAF0F7', 4.5], ['light navy on white', '#0B2E5C', '#FFFFFF', 4.5], ['light navy on tint', '#0B2E5C', '#EAF0F7', 4.5], ['light link on white', '#0B4F9C', '#FFFFFF', 4.5], ['light link on band', '#0B4F9C', '#F4F6F9', 4.5], ['light link on tint', '#0B4F9C', '#EAF0F7', 4.5], ['light accent text on white', '#0B6B73', '#FFFFFF', 4.5], ['light accent text on tint', '#0B6B73', '#EAF0F7', 4.5], ['white on navy (buttons, thead, ribbon)', '#FFFFFF', '#0B2E5C', 4.5], ['light draft badge', '#5C3D00', '#FFF3D1', 4.5], ['light ok badge', '#14532D', '#E3F4E7', 4.5], ['light deprecated badge', '#3E4958', '#E9EDF2', 4.5], ['light focus ring', '#0B5BD3', '#FFFFFF', 3], ['light status border', '#A87400', '#FFFFFF', 3],
-  ['dark text', '#E4E9F0', '#0E141C', 4.5], ['dark text on band', '#E4E9F0', '#131B26', 4.5], ['dark muted on bg', '#AAB5C4', '#0E141C', 4.5], ['dark muted on band', '#AAB5C4', '#131B26', 4.5], ['dark muted on tint', '#AAB5C4', '#16263A', 4.5], ['dark navy text on bg', '#9CC2F0', '#0E141C', 4.5], ['dark navy text on tint', '#9CC2F0', '#16263A', 4.5], ['dark link on bg', '#8DB8EE', '#0E141C', 4.5], ['dark link on band', '#8DB8EE', '#131B26', 4.5], ['dark link on tint', '#8DB8EE', '#16263A', 4.5], ['dark accent on bg', '#5CC6CE', '#0E141C', 4.5], ['dark accent on tint', '#5CC6CE', '#16263A', 4.5], ['dark button text', '#0E141C', '#9CC2F0', 4.5], ['dark ribbon', '#E4E9F0', '#0A2240', 4.5], ['dark thead', '#0E141C', '#9CC2F0', 4.5], ['dark draft badge', '#F2CF7A', '#33270A', 4.5], ['dark ok badge', '#8FE3A3', '#12301C', 4.5], ['dark deprecated badge', '#B4BECB', '#1D2733', 4.5], ['dark focus ring', '#7FB1FF', '#0E141C', 3], ['dark status border', '#B98A1A', '#0E141C', 3]];
+const PAIRS = [];
+const addPairs = (pfx, ink, muted, bg, band, acc) => { for (const [n, fg, b, min] of [['text', ink, bg, 4.5], ['text on band', ink, band, 4.5], ['muted', muted, bg, 4.5], ['muted on band', muted, band, 4.5], ['accent text', acc, bg, 4.5], ['accent on band', acc, band, 4.5], ['paper on accent', bg, acc, 4.5]]) PAIRS.push([pfx + ' ' + n, fg, b, min]); };
+addPairs('light', '#15181C', '#4F565F', '#FBFAF7', '#F2F0EB', '#0A3A82');
+addPairs('dark', '#ECEBE7', '#A9ADB3', '#101214', '#171A1D', '#8DB0F2');
 for (const [n, fg, bg, min] of PAIRS) ok(cr(fg, bg) >= min, `contrast ${n}: ${cr(fg, bg).toFixed(2)} < ${min}`);
 // 6. the reference implementation passes its conformance vectors
 import { spawnSync } from 'node:child_process';
 const v = spawnSync('node', ['reference/verify.mjs'], { encoding: 'utf8' }); ok(v.status === 0, 'reference/verify.mjs failed:\n' + v.stdout.split('\n').filter((l) => l.startsWith('FAIL')).join('\n'));
+// 7. diagrams: present in en and de, valid, two colours only, calm motion rules
+const CSS = readFileSync(join(DIST, 'assets/style.css'), 'utf8');
+for (const [pg, names] of [['/', ['actors', 'chain', 'verify', 'tamper']], ['/de/', ['actors', 'chain', 'verify', 'tamper']], ['/explainer/', ['verify', 'tamper']], ['/for/examiners/', ['chain']]]) {
+  const src = readFileSync(join(DIST, pg, 'index.html'), 'utf8');
+  for (const n of names) {
+    const m = new RegExp(`<figure class="dg" id="dg-${n}"[^>]*>(<svg[\\s\\S]*?</svg>)<figcaption>`).exec(src); ok(!!m, `${pg}: diagram ${n} missing`); if (!m) continue;
+    const svg = m[1];
+    ok(/role="img" aria-labelledby="[\w-]+-t [\w-]+-d"/.test(svg) && /<title id="[\w-]+-t">[^<]{5,}/.test(svg) && /<desc id="[\w-]+-d">[^<]{40,}/.test(svg), `${pg}: ${n} needs title and desc`);
+    ok(!/#[0-9a-fA-F]{3,6}\b|rgb\(|\sfill="|\sstroke="|\sstyle="/.test(svg), `${pg}: ${n} has colour values in markup (colours come from the two-colour CSS)`);
+    const open = (svg.match(/<(rect|path|circle|text|g|title|desc)\b/g) || []).length, close = (svg.match(/<\/(text|g|title|desc)>|\/>/g) || []).length; ok(open === close, `${pg}: ${n} tags unbalanced (${open}/${close})`);
+    ok((svg.match(/<svg/g) || []).length === 1 && /viewBox="0 0 \d+ \d+"/.test(svg), `${pg}: ${n} viewBox`);
+  }
+  ok(!/Claude|accredited|accreditation/i.test((src.match(/<figure class="dg"[\s\S]*?<\/figure>/g) || []).join('')), `${pg}: forbidden words in diagrams`);
+}
+ok(/Beweis|Bündel|Prüfende Stelle/.test(readFileSync(join(DIST, 'de/index.html'), 'utf8').match(/<figure class="dg" id="dg-actors"[\s\S]*?<\/figure>/)?.[0] || ''), 'de diagram carries German text');
+ok(/prefers-reduced-motion:reduce\)\{\.dg \*\{animation:none!important/.test(CSS) && /prefers-reduced-motion:no-preference\)\{\s*\.dg/.test(CSS), 'reduced-motion rules for diagrams');
+// exactly two colours plus neutrals in the stylesheet (outside print)
+const hexes = [...new Set((CSS.split('@media print')[0].match(/#[0-9a-fA-F]{6}\b/g) || []).map((h) => h.toUpperCase()))];
+const ACC = new Set(['#0A3A82', '#072B63', '#8DB0F2', '#B3CBF7']);
+for (const h of hexes) { const c = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); const sat = (Math.max(...c) - Math.min(...c)) / 255; ok(ACC.has(h) || sat < 0.09, `colour ${h} is neither accent nor neutral`); }
+ok(!/gradient|box-shadow:\s*[^n;}]/.test(CSS.replace(/box-shadow:none/g, '').replace(/box-shadow:(inset )?[\d.]+(px)? 0 0 (\d+px )?var\(--\w+\)/g, '').replace(/box-shadow:var\(--shadow\)/g, '')), 'no gradients or shadows');
 if (fails.length) { console.error('FAILED\n' + fails.join('\n')); process.exit(1); }
 console.log(`ok: ${html.length} pages, ${files.length} files, ${PAIRS.length} contrast pairs`);

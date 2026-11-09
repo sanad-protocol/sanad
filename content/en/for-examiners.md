@@ -19,6 +19,8 @@ An attestation is a signed statement about one item of evidence: the level award
 
 ## Blind marking
 
+<!-- diagram:chain -->
+
 Each attestor first publishes a commitment to a mark and reveals it only after all commitments have been published.
 
 ## Conflicts of interest

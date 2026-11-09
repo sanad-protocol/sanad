@@ -6,6 +6,7 @@ import { SITE, LANGS, T, DATE_LONG } from './lib/i18n.mjs';
 import { render, esc, LOGO_MARK, LOGO_WORD } from './lib/layout.mjs';
 import { homeHtml } from './lib/home.mjs';
 import { FIGURES } from './lib/figures.mjs';
+import { embedDiagrams } from './lib/diagrams.mjs';
 import { runVectors } from './reference/run.mjs';
 
 const OUT = 'dist';
@@ -76,7 +77,7 @@ for (const lang of Object.keys(LANGS)) {
     let body = raw, glance = '';
     body = body.replace(/<!-- glance -->([\s\S]*?)<!-- \/glance -->/, (_, g) => { glance = g.trim(); return ''; });
     const [md2, fn] = footnotes(body, lang);
-    let [html, headings] = mdToHtml(md2, lang);
+    let [html, headings] = mdToHtml(md2, lang); html = embedDiagrams(html, lang);
     const [gl] = glance ? mdToHtml(glance, lang) : [''];
     const meta = fm.docid ? { id: fm.docid, version: fm.version || '0.1', status: fm.status, licence: fm.licence } : undefined;
     addPage({ lang, rawH1: fm.h1, rawLead: fm.lead, key: fm.key, path: fm.path, title: fm.title, h1: fm.h1, short: fm.short, description: fm.description, nav: fm.nav, template: fm.template, numbered: fm.numbered === 'true', toc: fm.toc === 'true', tocItems: headings.filter((h) => h.level <= 3), crumbs: fm.crumbs ? JSON.parse(fm.crumbs) : [], meta, lead: fm.lead ? mdToHtml(fm.lead, lang)[0].replace(/^<p>|<\/p>\n?$/g, '') : '', glance: gl, html, footnotes: fn, stamp: fm.stamp });
@@ -116,9 +117,9 @@ for (const p of pages) {
 // ---- assets
 mkdirSync(join(OUT, 'assets'), { recursive: true }); cpSync('assets', join(OUT, 'assets'), { recursive: true });
 const svg = (inner, color, bg) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 32" width="768" height="128" role="img" aria-label="Sanad">${bg ? `<rect width="192" height="32" fill="${bg}"/>` : ''}<g color="${color}">${inner}</g></svg>\n`;
-writeFileSync(join(OUT, 'assets/logo-color.svg'), svg(LOGO_MARK + LOGO_WORD, '#003B73'));
+writeFileSync(join(OUT, 'assets/logo-color.svg'), svg(LOGO_MARK + LOGO_WORD, '#0A3A82'));
 writeFileSync(join(OUT, 'assets/logo-black.svg'), svg(LOGO_MARK + LOGO_WORD, '#000000'));
-writeFileSync(join(OUT, 'assets/logo-reversed.svg'), svg(LOGO_MARK + LOGO_WORD, '#FFFFFF', '#003B73'));
+writeFileSync(join(OUT, 'assets/logo-reversed.svg'), svg(LOGO_MARK + LOGO_WORD, '#FFFFFF', '#0A3A82'));
 for (const f of ['favicon.svg', 'favicon-32.png', 'apple-touch-icon.png', 'site.webmanifest']) cpSync(join('assets', f), join(OUT, f));
 
 // ---- feeds and machine-readable files
