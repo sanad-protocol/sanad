@@ -97,3 +97,26 @@ describe('assertTemplate, hash, policy', () => {
     expect('id' in p).toBe(false);
   });
 });
+
+describe('review fixes', () => {
+  it('refuses reserved levelMap keys', () => {
+    for (const k of ['__proto__', 'constructor', 'toString']) {
+      const t = JSON.parse(JSON.stringify(good()));
+      Object.defineProperty(t.levelMap, k, { value: 3, enumerable: true, configurable: true, writable: true });
+      expect(validateTemplate(t).ok).toBe(false);
+    }
+  });
+  it('refuses xwalk values that cannot be hashed, and absurd deadlines', () => {
+    for (const bad of [{ a: NaN }, { a: Infinity }, { a: undefined }, { a: () => 1 }, { a: 1n }, { a: new Date() }]) {
+      expect(validateTemplate(mut((t) => { t.skill.xwalk = bad; })).ok).toBe(false);
+    }
+    const deep = {}; let c = deep; for (let i = 0; i < 20; i++) { c.n = {}; c = c.n; }
+    expect(validateTemplate(mut((t) => { t.skill.xwalk = deep; })).ok).toBe(false);
+    const cyc = {}; cyc.self = cyc;
+    expect(validateTemplate(mut((t) => { t.skill.xwalk = cyc; })).ok).toBe(false);
+    expect(validateTemplate(mut((t) => { t.skill.xwalk = { eqf: 6, list: ['a', null, true] }; })).ok).toBe(true);
+    expect(validateTemplate(mut((t) => { t.deadlines.revealHours = 1e300; })).ok).toBe(false);
+    expect(validateTemplate(mut((t) => { t.deadlines.commitHours = 87601; })).ok).toBe(false);
+    expect(validateTemplate(mut((t) => { t.deadlines.commitHours = 87600; })).ok).toBe(true);
+  });
+});

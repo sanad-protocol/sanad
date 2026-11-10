@@ -9,6 +9,18 @@ const isStr = (v) => typeof v === 'string' && v.length > 0;
 const isLevel = (v) => Number.isInteger(v) && v >= 0 && v <= 5;
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
+/** True when v is plain JSON data (strings, finite numbers, booleans, null, arrays, objects) nested at most 12 deep, so that hashing it can never throw. */
+function jsonSafe(v, depth = 0) {
+  if (depth > 12) return false;
+  if (v === null || typeof v === 'string' || typeof v === 'boolean') return true;
+  if (typeof v === 'number') return Number.isFinite(v);
+  if (Array.isArray(v)) return v.every((x) => jsonSafe(x, depth + 1));
+  if (isObj(v) && [Object.prototype, null].includes(Object.getPrototypeOf(v))) return Object.keys(v).every((k) => jsonSafe(v[k], depth + 1));
+  return false;
+}
+/** Longest deadline accepted: ten years in hours (larger values overflow date arithmetic). */
+const MAX_HOURS = 87600;
+
 function closed(o, required, optional, where, errors) {
   for (const k of Object.keys(o)) if (!required.includes(k) && !optional.includes(k)) errors.push(where + ': unknown member "' + k + '"');
   for (const k of required) if (!(k in o)) errors.push(where + ': missing member "' + k + '"');
@@ -35,7 +47,7 @@ export function validateTemplate(t) {
       if ('id' in s && !(typeof s.id === 'string' && ID_RE.test(s.id))) errors.push('skill.id: must match ' + ID_RE);
       if ('title' in s && !isStr(s.title)) errors.push('skill.title: must be a non-empty string');
       if ('graphHash' in s && !isStr(s.graphHash)) errors.push('skill.graphHash: must be a non-empty string');
-      if ('xwalk' in s && !isObj(s.xwalk)) errors.push('skill.xwalk: must be an object');
+      if ('xwalk' in s && !(isObj(s.xwalk) && jsonSafe(s.xwalk))) errors.push('skill.xwalk: must be an object of plain JSON values (finite numbers, nesting up to 12)');
     }
   }
 
@@ -136,7 +148,7 @@ export function validateTemplate(t) {
     if (!isObj(d)) errors.push('deadlines: must be an object');
     else {
       closed(d, ['commitHours', 'revealHours'], [], 'deadlines', errors);
-      for (const k of ['commitHours', 'revealHours']) if (k in d && !(isNum(d[k]) && d[k] > 0)) errors.push('deadlines.' + k + ': must be a positive number');
+      for (const k of ['commitHours', 'revealHours']) if (k in d && !(isNum(d[k]) && d[k] > 0 && d[k] <= MAX_HOURS)) errors.push('deadlines.' + k + ': must be a positive number of at most ' + MAX_HOURS);
     }
   }
 
@@ -144,6 +156,7 @@ export function validateTemplate(t) {
     if (!isObj(t.levelMap)) errors.push('levelMap: must be an object');
     else for (const [k, v] of Object.entries(t.levelMap)) {
       if (k === '') errors.push('levelMap: empty key');
+      if (k in Object.prototype) errors.push('levelMap: key "' + k + '" is reserved');
       if (!isLevel(v)) errors.push('levelMap.' + k + ': must be an integer from 0 to 5');
     }
   }

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { sign as edSign, randomBytes } from 'node:crypto';
 import {
   b64u, fromB64u, base58btcEncode, base58btcDecode, generateKeyPair, keyPairFromSeed, exportPrivateKey, importPrivateKey, publicKeyOf,
-  didKeyFromPublicKey, publicKeyFromDidKey, kidForDidKey, jwsHeader, signJws, parseJws, verifyJws, makeSigner, createResolver,
+  didKeyFromPublicKey, publicKeyFromDidKey, isSmallOrderKey, isIsoDate, kidForDidKey, jwsHeader, signJws, parseJws, verifyJws, makeSigner, createResolver,
 } from '../src/keys.mjs';
 import { canonical } from '../src/core.mjs';
 
@@ -226,5 +226,64 @@ describe('resolver', () => {
     expect(m.has('dids/' + DIDW)).toBe(true);
     expect(createResolver({ store }).keysAt(DIDW, '2026-02-01').length).toBe(1);
     expect(calls.every(([, c]) => c === 'dids')).toBe(true);
+  });
+});
+
+describe('review fixes', () => {
+  const kp = keyPairFromSeed(SEED);
+  const kid = kidForDidKey(DID);
+  const typ = 'sanad-test+jws';
+  const payload = { a: 1 };
+  it('refuses a header with a byte-order mark although it was signed', () => {
+    const hdr = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(jwsHeader(typ, kid))]);
+    const hb = b64u(hdr);
+    const input = hb + '.' + b64u(enc.encode(canonical(payload)));
+    const jws = hb + '..' + b64u(edSign(null, Buffer.from(input), kp.privateKey));
+    expect(() => parseJws(jws)).toThrow();
+    expect(verifyJws({ jws, payload, typ, publicKey: kp.publicKey })).toBe(false);
+  });
+  it('refuses a signature whose S is raised by the group order', () => {
+    const jws = signJws({ typ, kid, payload, privateKey: kp.privateKey });
+    const [h, , s] = jws.split('.');
+    const sig = new Uint8Array(fromB64u(s));
+    const L = 2n ** 252n + 27742317777372353535851937790883648493n;
+    let S = 0n; for (let i = 31; i >= 0; i--) S = (S << 8n) | BigInt(sig[32 + i]);
+    let t = S + L; for (let i = 0; i < 32; i++) { sig[32 + i] = Number(t & 255n); t >>= 8n; }
+    expect(verifyJws({ jws: h + '..' + b64u(sig), payload, typ, publicKey: kp.publicKey })).toBe(false);
+  });
+  it('refuses small-order keys, which would verify one signature over any message', () => {
+    const identity = new Uint8Array(32); identity[0] = 1;
+    const zeroY = new Uint8Array(32);
+    const minusOne = Uint8Array.from(unhex('ecffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff7f'));
+    const universal = new Uint8Array(64); universal[0] = 1; // R = identity, S = 0
+    const jws = b64u(enc.encode(jwsHeader(typ, 'x#k'))) + '..' + b64u(universal);
+    for (const k of [identity, zeroY, minusOne]) {
+      expect(isSmallOrderKey(k)).toBe(true);
+      expect(verifyJws({ jws, payload: { any: 'thing' }, typ, publicKey: k })).toBe(false);
+      expect(() => publicKeyFromDidKey(didKeyFromPublicKey(k))).toThrow();
+    }
+    expect(isSmallOrderKey(kp.publicKey)).toBe(false);
+    expect(isSmallOrderKey(generateKeyPair().publicKey)).toBe(false);
+    const r = createResolver();
+    const doc = { id: 'did:web:a.example', versions: [{ version: 1, validFrom: '2026-01-01', keys: [{ id: '#k1', publicKeyMultibase: 'z' + base58btcEncode(identity) }], revoked: [] }] };
+    expect(() => r.register(doc)).toThrow(/usable/);
+    expect(r.verifyStatement({ jws, payload: {}, typ, signer: 'did:key:z' + base58btcEncode(Uint8Array.from([0xed, 0x01, ...identity])), date: '2026-02-01' }).ok).toBe(false);
+  });
+  it('refuses overlong did:key and multibase input without long computation', () => {
+    expect(() => publicKeyFromDidKey('did:key:z' + '2'.repeat(100000))).toThrow();
+    const r = createResolver();
+    const doc = { id: 'did:web:b.example', versions: [{ version: 1, validFrom: '2026-01-01', keys: [{ id: '#k1', publicKeyMultibase: 'z' + '2'.repeat(100000) }], revoked: [] }] };
+    expect(() => r.register(doc)).toThrow();
+  });
+  it('isIsoDate agrees with the core on years below 100', () => {
+    expect(isIsoDate('0050-01-01')).toBe(false);
+    expect(isIsoDate('0100-01-01')).toBe(true);
+    expect(isIsoDate('2026-02-29')).toBe(false);
+  });
+  it('verifyStatement returns a result, not an exception, when the store throws', () => {
+    const store = { get() { throw new Error('damaged'); }, put() {} };
+    const r = createResolver({ store });
+    const jws = signJws({ typ, kid: 'did:web:c.example#k1', payload, privateKey: kp.privateKey });
+    expect(r.verifyStatement({ jws, payload, typ, signer: 'did:web:c.example', date: '2026-02-01' })).toEqual({ ok: false, reason: 'key_not_valid' });
   });
 });

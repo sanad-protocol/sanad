@@ -53,3 +53,12 @@ describe('attestorStats', () => {
     expect(JSON.stringify(a)).toBe(JSON.stringify(b));
   });
 });
+
+describe('review fixes', () => {
+  it('a key named __proto__ stays an own data member', () => {
+    const out = attestorStats([{ evidence: ev, marks: [m('__proto__', 'E1', 3), m('did:a', 'E1', 3)] }]);
+    expect(Object.keys(out)).toEqual(['__proto__', 'did:a']);
+    expect(Object.getPrototypeOf(out)).toBe(Object.prototype);
+    expect(Object.getOwnPropertyDescriptor(out, '__proto__').value).toEqual({ sittings: 1, agreement: 1 });
+  });
+});

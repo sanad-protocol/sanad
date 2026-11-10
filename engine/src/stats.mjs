@@ -29,7 +29,8 @@ export function attestorStats(records) {
   const out = {};
   for (const did of [...acc.keys()].sort()) {
     const a = acc.get(did);
-    out[did] = { sittings: a.sittings, agreement: a.total === 0 ? 0 : Math.round((a.agree / a.total) * 1000) / 1000 };
+    // defineProperty, so that a key such as "__proto__" becomes a data member and never changes the prototype
+    Object.defineProperty(out, did, { enumerable: true, configurable: true, writable: true, value: { sittings: a.sittings, agreement: a.total === 0 ? 0 : Math.round((a.agree / a.total) * 1000) / 1000 } });
   }
   return out;
 }
