@@ -1,6 +1,6 @@
 {
   "name": "sanadprotocol.org",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Website of Sanad, an open protocol for recomputable recognition of skills (draft).",
   "license": "Apache-2.0",
@@ -12,6 +12,9 @@
     "pdf": "node pdf.mjs",
     "reference:build": "node reference/build.mjs",
     "reference:verify": "node reference/verify.mjs",
+    "engine:test": "vitest run engine/test",
+    "engine:build": "node engine/build.mjs",
+    "engine:vectors": "node engine/vectors/run.mjs",
     "unit": "vitest run"
   },
   "devDependencies": {

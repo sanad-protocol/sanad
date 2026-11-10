@@ -51,6 +51,13 @@ for (const [n, fg, bg, min] of PAIRS) ok(cr(fg, bg) >= min, `contrast ${n}: ${cr
 // 6. the reference implementation passes its conformance vectors
 import { spawnSync } from 'node:child_process';
 const v = spawnSync('node', ['reference/verify.mjs'], { encoding: 'utf8' }); ok(v.status === 0, 'reference/verify.mjs failed:\n' + v.stdout.split('\n').filter((l) => l.startsWith('FAIL')).join('\n'));
+// 6b. engine vectors (only once engine/vectors/run.mjs exists) and the Engine pages
+if (existsSync('engine/vectors/run.mjs')) { const ev = spawnSync('node', ['engine/vectors/run.mjs'], { encoding: 'utf8' }); ok(ev.status === 0, 'engine/vectors/run.mjs failed:\n' + (ev.stdout + ev.stderr).split('\n').filter((l) => /FAIL|Error/.test(l)).join('\n')); }
+for (const pg of ['engine/index.html', 'de/engine/index.html']) {
+  const f = join(DIST, pg); ok(existsSync(f), `${pg} missing`); if (!existsSync(f)) continue;
+  const t = readFileSync(f, 'utf8').replace(/not accreditation|keine Akkreditierung/gi, '');
+  ok(!/Claude|Anthropic|accredit|akkredit|\bdraft\b|Entwurf/i.test(t), `${pg}: forbidden words`);
+}
 // 7. diagrams: present in en and de, valid, two colours only, calm motion rules
 const CSS = readFileSync(join(DIST, 'assets/style.css'), 'utf8');
 for (const [pg, names] of [['/', ['actors', 'chain', 'verify', 'tamper']], ['/de/', ['actors', 'chain', 'verify', 'tamper']], ['/explainer/', ['verify', 'tamper']], ['/for/examiners/', ['chain']]]) {

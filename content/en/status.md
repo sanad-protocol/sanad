@@ -8,7 +8,7 @@ description: What Sanad is today, what exists, and what it does not claim.
 ---
 
 <!-- glance -->
-- Version 0.1.
+- Specification version 0.1; code version 0.2 (algorithm `sanad-0.1` unchanged).
 - No accreditation. No token. No ranking of people.
 - One steward for now; a foundation in the United Arab Emirates is in preparation.
 <!-- /glance -->
@@ -18,12 +18,16 @@ description: What Sanad is today, what exists, and what it does not claim.
 - A [specification](/spec/0.1/) (SANAD-SPEC-0.1): data model, canonical hashing, the recognition function (rules R1 to R8), transparency log, privacy and discovery, threats, governance and open questions.
 - This website, in English and German.
 - A reference implementation with 20 conformance vectors, and an interactive explainer hosted by the Kamangir project for now.
+- The [engine](/engine/) (code version 0.2): assessment templates, blind commit and reveal with Ed25519 signatures, a transparency log with inclusion and consistency proofs, an HTTP API, a command-line tool, three example assessments and engine vectors.
+- The first host of the engine, the Kamangir examination service, in test mode only.
 
 ## What has not been done
 
 - Review by a standards body, a lawyer or an external cryptographer.
 - Trademark registration (the steward will file the application in person; not yet filed) and copyright deposit (see [the name](/name-and-ip/) and [intellectual property policy](/ipr/)).
 - Independent implementations, conformance testing, real attestors outside the author's circle.
+- External review of the engine's cryptography.
+- An npm package or a tagged release of the code.
 - Native-speaker review of the German text.
 
 ## What Sanad does not claim
