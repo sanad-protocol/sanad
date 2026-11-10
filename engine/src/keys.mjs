@@ -5,7 +5,8 @@ import { canonical } from './core.mjs';
 import { EngineError } from './errors.mjs';
 
 const enc = new TextEncoder();
-const dec = new TextDecoder('utf-8', { fatal: true });
+// ignoreBOM keeps a leading byte-order mark in the text, so a header with a BOM fails the canonical-form check instead of being silently accepted.
+const dec = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
 
 /** Base64url without padding. */
 export function b64u(bytes) { return Buffer.from(bytes).toString('base64url'); }
@@ -61,6 +62,31 @@ export function keyPairFromSeed(seed) {
 export function exportPrivateKey(privateKey) { return b64u(privateKey.export({ type: 'pkcs8', format: 'der' })); }
 export function importPrivateKey(str) { return createPrivateKey({ key: Buffer.from(fromB64u(str)), format: 'der', type: 'pkcs8' }); }
 
+// Ed25519 keys of small order (the identity and the other seven torsion points) verify one fixed signature over every message, so no signer is
+// bound to such a key. A point is of small order when eight times the point is the identity (curve arithmetic below, plain BigInt, affine).
+const P25519 = 2n ** 255n - 19n;
+const D25519 = ((P25519 - 121665n * modPow(121666n, P25519 - 2n, P25519) % P25519) % P25519 + P25519) % P25519;
+function modPow(b, e, m) { let r = 1n; b %= m; while (e > 0n) { if (e & 1n) r = r * b % m; b = b * b % m; e >>= 1n; } return r; }
+const inv = (a) => modPow(((a % P25519) + P25519) % P25519, P25519 - 2n, P25519);
+/** True when the 32 bytes are not an Ed25519 point or are a point of order 1, 2, 4 or 8. */
+export function isSmallOrderKey(raw32) {
+  if (!(raw32 instanceof Uint8Array) || raw32.length !== 32) return true;
+  let y = 0n; for (let i = 31; i >= 0; i--) y = (y << 8n) | BigInt(raw32[i]);
+  y &= (1n << 255n) - 1n; y %= P25519;
+  const y2 = y * y % P25519;
+  const u = (y2 - 1n + P25519) % P25519, v = (D25519 * y2 + 1n) % P25519;
+  const t = u * inv(v) % P25519;
+  let x = modPow(t, (P25519 + 3n) / 8n, P25519);
+  if (x * x % P25519 !== t) x = x * modPow(2n, (P25519 - 1n) / 4n, P25519) % P25519;
+  if (x * x % P25519 !== t) return true; // not on the curve
+  const add = (a, b) => {
+    const k = D25519 * a[0] % P25519 * a[1] % P25519 * b[0] % P25519 * b[1] % P25519;
+    return [(a[0] * b[1] + b[0] * a[1]) % P25519 * inv(1n + k) % P25519, (a[1] * b[1] + a[0] * b[0]) % P25519 * inv(1n - k) % P25519];
+  };
+  let q = [x, y]; for (let i = 0; i < 3; i++) q = add(q, q);
+  return q[0] === 0n && q[1] === 1n;
+}
+
 function publicKeyObject(raw32) { return createPublicKey({ key: Buffer.concat([SPKI_PREFIX, raw32]), format: 'der', type: 'spki' }); }
 
 const DID_KEY = 'did:key:';
@@ -70,9 +96,12 @@ export function didKeyFromPublicKey(raw32) {
 }
 export function publicKeyFromDidKey(did) {
   if (typeof did !== 'string' || !did.startsWith(DID_KEY + 'z')) throw new Error('not a did:key with a base58btc key');
+  if (did.length > 80) throw new Error('did:key is too long');
   const bytes = base58btcDecode(did.slice(DID_KEY.length + 1));
   if (bytes.length !== 34 || bytes[0] !== 0xed || bytes[1] !== 0x01) throw new Error('not an Ed25519 did:key');
-  return bytes.slice(2);
+  const key = bytes.slice(2);
+  if (isSmallOrderKey(key)) throw new Error('key is not usable (small order or not on the curve)');
+  return key;
 }
 export function kidForDidKey(did) { return did + '#' + did.slice(DID_KEY.length); }
 
@@ -112,6 +141,7 @@ export function verifyJws({ jws, payload, typ, publicKey }) {
   try {
     const { header, headerB64, signature } = parseJws(jws);
     if (header.typ !== typ) return false;
+    if (isSmallOrderKey(publicKey)) return false;
     return edVerify(null, Buffer.from(signingInput(headerB64, payload), 'utf8'), publicKeyObject(publicKey), signature);
   } catch { return false; }
 }
@@ -129,7 +159,8 @@ export function makeSigner(privateKey, did) {
 export function isIsoDate(s) {
   if (typeof s !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
   const d = new Date(s + 'T00:00:00Z');
-  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  // years below 100 are refused as well: the core's dayNumber reads them as 19xx, so the two would disagree
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s && Number(s.slice(0, 4)) >= 100;
 }
 
 const KEY_ID_RE = /^#[A-Za-z0-9._-]{1,64}$/;
@@ -138,9 +169,10 @@ const exactly = (o, names) => { const k = Object.keys(o).sort(); return k.length
 const clone = (v) => JSON.parse(JSON.stringify(v));
 
 function rawFromMultibase(s) {
-  if (typeof s !== 'string' || !s.startsWith('z')) throw new Error('multibase must start with z');
+  if (typeof s !== 'string' || !s.startsWith('z') || s.length > 80) throw new Error('multibase must start with z');
   const raw = base58btcDecode(s.slice(1));
   if (raw.length !== 32) throw new Error('key must be 32 bytes');
+  if (isSmallOrderKey(raw)) throw new Error('key is not usable (small order or not on the curve)');
   return raw;
 }
 
@@ -232,7 +264,8 @@ export function createResolver({ store } = {}) {
       const { header } = parsed;
       if (typeof signer !== 'string' || !header.kid.startsWith(signer + '#')) return { ok: false, reason: 'kid_mismatch' };
       if (header.typ !== typ) return { ok: false, reason: 'wrong_type' };
-      const key = resolver.keysAt(signer, date).find((k) => k.kid === header.kid);
+      let key;
+      try { key = resolver.keysAt(signer, date).find((k) => k.kid === header.kid); } catch { key = undefined; } // a damaged or refused record is "no valid key", never an exception
       if (!key) return { ok: false, reason: 'key_not_valid' };
       if (!verifyJws({ jws, payload, typ, publicKey: key.publicKey })) return { ok: false, reason: 'bad_signature' };
       return { ok: true, kid: key.kid };

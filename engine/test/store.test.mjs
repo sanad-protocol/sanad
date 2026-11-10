@@ -223,3 +223,77 @@ describe('openStore', () => {
     expect(() => openStore(null)).toThrow(expect.objectContaining({ code: 'bad_store' }));
   });
 });
+
+describe('file store review fixes', () => {
+  const FS = () => fs;
+  it('does not truncate entries added by another writer; reports a conflict', () => {
+    const d = tmp(); const a = createFileStore(d), b = createFileStore(d);
+    a.append('log', { n: 1 });
+    b.append('log', { n: 2 });
+    expect(() => a.append('log', { n: 3 })).toThrow(expect.objectContaining({ code: 'store_conflict' }));
+    expect(a.read('log')).toEqual([{ n: 1 }, { n: 2 }]);
+    expect(a.size('log')).toBe(2);
+    expect(a.append('log', { n: 3 })).toBe(2);
+    expect(b.read('log')).toEqual([{ n: 1 }, { n: 2 }, { n: 3 }]);
+    a.close(); b.close();
+  });
+  it('size sees lines appended by another writer', () => {
+    const d = tmp(); const a = createFileStore(d), b = createFileStore(d);
+    expect(a.size('log')).toBe(0);
+    b.append('log', 1);
+    expect(a.size('log')).toBe(1);
+    a.close(); b.close();
+  });
+  it('rejects a record file copied under another name or holding a different id', () => {
+    const d = tmp(); const s = createFileStore(d);
+    s.put('c', 'a', { v: 1 });
+    FS().copyFileSync(join(d, 'collections', 'c_c', 'i_a.json'), join(d, 'collections', 'c_c', 'i_b.json'));
+    expect(() => s.get('c', 'b')).toThrow(expect.objectContaining({ code: 'store_corrupt' }));
+    expect(() => s.list('c')).toThrow(expect.objectContaining({ code: 'store_corrupt' }));
+    s.close();
+  });
+  it('rejects malformed record files with a store error, not a TypeError', () => {
+    const d = tmp(); const s = createFileStore(d);
+    s.put('c', 'a', 1);
+    for (const body of ['null', '[]', '{"id":"a"}', 'nope']) {
+      writeFileSync(join(d, 'collections', 'c_c', 'i_a.json'), body);
+      expect(() => s.get('c', 'a')).toThrow(expect.objectContaining({ code: 'store_corrupt' }));
+    }
+    s.close();
+  });
+  it('keeps __proto__ keys as plain data and returns independent copies', () => {
+    const d = tmp(); const s = createFileStore(d);
+    s.put('c', 'a', JSON.parse('{"__proto__":{"x":1},"y":2}'));
+    const v = s.get('c', 'a');
+    expect(Object.getPrototypeOf(v)).toBe(Object.prototype);
+    expect(({}).x).toBeUndefined();
+    expect(Object.keys(v)).toEqual(['__proto__', 'y']);
+    s.close();
+  });
+  it('does not follow symbolic links in the store', () => {
+    if (process.platform === 'win32') return;
+    const d = tmp(); const out = tmp(); const s = createFileStore(d);
+    s.append('log', 1); s.put('c', 'a', 1);
+    // stream file replaced by a link to a file outside
+    FS().writeFileSync(join(out, 'target'), '{"stolen":1}\n');
+    FS().rmSync(join(d, 'streams', 's_log.jsonl'));
+    FS().symlinkSync(join(out, 'target'), join(d, 'streams', 's_log.jsonl'));
+    const s2 = createFileStore(d);
+    expect(() => s2.read('log')).toThrow();
+    expect(() => s2.append('log', 2)).toThrow();
+    expect(FS().readFileSync(join(out, 'target'), 'utf8')).toBe('{"stolen":1}\n');
+    // collection directory replaced by a link
+    FS().rmSync(join(d, 'collections', 'c_c'), { recursive: true });
+    FS().symlinkSync(out, join(d, 'collections', 'c_c'));
+    expect(() => s2.put('c', 'z', 1)).toThrow();
+    expect(() => s2.get('c', 'target')).toThrow();
+    expect(readdirSync(out)).toEqual(['target']);
+    s.close(); s2.close();
+  });
+  it('refuses a store whose root directories are links', () => {
+    if (process.platform === 'win32') return;
+    const d = tmp(); const out = tmp();
+    FS().symlinkSync(out, join(d, 'collections'));
+    expect(() => createFileStore(d)).toThrow(expect.objectContaining({ code: 'store_corrupt' }));
+  });
+});

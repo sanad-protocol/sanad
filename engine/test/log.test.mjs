@@ -280,3 +280,60 @@ describe('createLog', () => {
     expect(verifyCheckpoint(cp, () => true)).toBe(false);
   });
 });
+
+describe('review fixes: log', () => {
+  const ts = '2026-01-02T03:04:05.000Z';
+  const mkLog = () => { const store = createMemoryStore(); return { store, log: createLog({ store, logId: 'r', clock: { now: () => Date.UTC(2026, 0, 1) } }) }; };
+  it('leafBytes rejects dates that do not exist', () => {
+    for (const bad of ['2026-02-31T00:00:00Z', '2026-13-01T00:00:00Z', '2026-01-01T24:00:00Z', '2025-02-29T00:00:00Z', '2026-01-01T00:60:00Z', '2026-01-00T00:00:00Z'])
+      expect(() => leafBytes({ kind: 'commit', ref: REF(1), ts: bad })).toThrow(expect.objectContaining({ code: 'bad_leaf' }));
+    expect(() => leafBytes({ kind: 'commit', ref: REF(1), ts: '2028-02-29T00:00:00Z' })).not.toThrow();
+    expect(() => leafBytes({ kind: 'commit', ref: REF(1), ts })).not.toThrow();
+  });
+  it('verifyChain rejects a non-canonical leaf with a valid hash (duplicate keys)', () => {
+    const { store, log } = mkLog();
+    log.append({ kind: 'commit', ref: REF(1) });
+    const e = store.read('log')[0];
+    const leaf = `{"kind":"commit","ref":"${REF(2)}","ref":"${REF(1)}","ts":"${ts}"}`;
+    const forged = { index: 0, leaf, leafHash: leafHash(leaf), prev: 'GENESIS' };
+    forged.hash = createHash('sha256').update(canonical({ index: 0, leaf, leafHash: forged.leafHash, prev: 'GENESIS' })).digest('hex');
+    const s2 = createMemoryStore(); s2.append('log', forged);
+    expect(e.leaf).not.toBe(leaf);
+    expect(createLog({ store: s2, logId: 'r' }).verifyChain()).toEqual({ ok: false, at: 0 });
+  });
+  it('verifyChain rejects entries with extra members or non-object entries', () => {
+    const { store, log } = mkLog();
+    log.append({ kind: 'commit', ref: REF(1) });
+    const s2 = createMemoryStore(); s2.append('log', { ...store.read('log')[0], note: 'x' });
+    expect(createLog({ store: s2, logId: 'r' }).verifyChain()).toEqual({ ok: false, at: 0 });
+    const s3 = createMemoryStore(); s3.append('log', null);
+    expect(createLog({ store: s3, logId: 'r' }).verifyChain()).toEqual({ ok: false, at: 0 });
+  });
+  it('refuses to append to a stored log that does not verify', () => {
+    const { store, log } = mkLog();
+    log.append({ kind: 'commit', ref: REF(1) });
+    const bad = createMemoryStore(); bad.append('log', { ...store.read('log')[0], prev: 'x' });
+    expect(() => createLog({ store: bad, logId: 'r' }).append({ kind: 'commit', ref: REF(2) })).toThrow(expect.objectContaining({ code: 'log_corrupt' }));
+    expect(bad.size('log')).toBe(1);
+  });
+  it('verifyCheckpoint requires the exact payload members and a real timestamp', () => {
+    const p = { logId: 'l', size: 1, rootHash: REF(1), timestamp: ts };
+    const ok = () => true;
+    expect(verifyCheckpoint({ payload: p, jws: 'a.b.c' }, ok)).toBe(true);
+    expect(verifyCheckpoint({ payload: { ...p, extra: 1 }, jws: 'a.b.c' }, ok)).toBe(false);
+    expect(verifyCheckpoint({ payload: { ...p, timestamp: '2026-02-31T00:00:00Z' }, jws: 'a.b.c' }, ok)).toBe(false);
+    expect(verifyCheckpoint({ payload: { ...p, timestamp: 'soon' }, jws: 'a.b.c' }, ok)).toBe(false);
+    expect(verifyCheckpoint({ payload: { ...p, rootHash: REF(1).toUpperCase() }, jws: 'a.b.c' }, ok)).toBe(false);
+    expect(verifyCheckpoint({ payload: [], jws: 'a.b.c' }, ok)).toBe(false);
+  });
+  it('verifiers reject uppercase hex, sparse proofs and index >= size', () => {
+    const lh = Array.from({ length: 5 }, (_, i) => leafHash('x' + i));
+    const base = { leafHash: lh[2], index: 2, size: 5, proof: inclusionProof(lh, 2, 5), root: merkleRoot(lh) };
+    expect(verifyInclusion(base)).toBe(true);
+    expect(verifyInclusion({ ...base, root: base.root.toUpperCase() })).toBe(false);
+    expect(verifyInclusion({ ...base, proof: [...base.proof, base.root] })).toBe(false);
+    expect(verifyInclusion({ ...base, proof: base.proof.slice(1) })).toBe(false);
+    expect(verifyInclusion({ ...base, proof: new Array(3) })).toBe(false);
+    expect(verifyConsistency({ m: 2, n: 5, proof: new Array(2), rootM: merkleRoot(lh.slice(0, 2)), rootN: base.root })).toBe(false);
+  });
+});

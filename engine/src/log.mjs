@@ -56,6 +56,18 @@ export function consistencyProof(leaves, m, n) {
   return sub(m, leaves.slice(0, n), true);
 }
 
+const TS = /^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d):(\d\d)(\.\d+)?(Z|[+-](\d\d):(\d\d))$/;
+/** True for a real calendar date-time in ISO form (Date.parse alone rolls 31 February over to March). */
+export function isIsoTime(ts) {
+  const m = typeof ts === 'string' ? TS.exec(ts) : null;
+  if (!m) return false;
+  const [y, mo, d, h, mi, se] = m.slice(1, 7).map(Number);
+  if (mo < 1 || mo > 12 || d < 1 || h > 23 || mi > 59 || se > 59) return false;
+  if (m[9] !== undefined && (Number(m[9]) > 23 || Number(m[10]) > 59)) return false;
+  if (d > new Date(Date.UTC(2000 + (y % 400), mo, 0)).getUTCDate()) return false;
+  return !Number.isNaN(Date.parse(ts));
+}
+
 const okHex = (h) => typeof h === 'string' && HEX64.test(h);
 const okProof = (p) => Array.isArray(p) && p.every(okHex);
 const isSize = (x) => Number.isSafeInteger(x) && x >= 0;
@@ -109,25 +121,45 @@ export function verifyConsistency(arg) {
 export function leafBytes({ kind, ref, ts } = {}) {
   if (!KINDS.includes(kind)) throw new EngineError('bad_leaf', 'unknown leaf kind');
   if (typeof ref !== 'string' || !HEX64.test(ref)) throw new EngineError('bad_leaf', 'ref must be 64 lowercase hex characters');
-  if (typeof ts !== 'string' || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:\d\d)$/.test(ts) || Number.isNaN(Date.parse(ts))) throw new EngineError('bad_leaf', 'ts must be an ISO date-time');
+  if (!isIsoTime(ts)) throw new EngineError('bad_leaf', 'ts must be an ISO date-time');
   return canonical({ kind, ref, ts });
 }
 
 const entryHash = (e) => sha256Hex(canonical({ index: e.index, leaf: e.leaf, leafHash: e.leafHash, prev: e.prev }));
 
+const ENTRY_KEYS = ['hash', 'index', 'leaf', 'leafHash', 'prev'];
+/** Index of the first stored entry that breaks the chain, or -1. Entries must have exactly the five known members and a canonical leaf. */
+function firstBadEntry(all, hashes) {
+  let prev = 'GENESIS';
+  for (let i = 0; i < all.length; i++) {
+    const e = all[i];
+    if (!e || typeof e !== 'object' || Array.isArray(e) || Object.keys(e).sort().join() !== ENTRY_KEYS.join()) return i;
+    if (e.index !== i || typeof e.leaf !== 'string' || e.prev !== prev || !okHex(e.leafHash) || !okHex(e.hash)) return i;
+    if (e.leafHash !== leafHash(e.leaf) || e.leafHash !== hashes[i] || e.hash !== entryHash(e)) return i;
+    try { if (leafBytes(JSON.parse(e.leaf)) !== e.leaf) return i; } catch { return i; }
+    prev = e.hash;
+  }
+  return -1;
+}
+
 export function createLog({ store, stream = 'log', logId, signer = null, clock = { now: () => Date.now() } } = {}) {
   if (!store) throw new EngineError('bad_config', 'a store is required');
   if (typeof logId !== 'string' || !logId) throw new EngineError('bad_config', 'logId is required');
   const stored = store.read(stream);
-  const hashes = stored.map((e) => e.leafHash); // cache of leaf hashes
-  let lastHash = stored.length ? stored[stored.length - 1].hash : 'GENESIS';
+  const hashes = stored.map((e) => e?.leafHash); // cache of leaf hashes
+  let lastHash = stored.length ? stored[stored.length - 1]?.hash : 'GENESIS';
   const size = () => hashes.length;
   const sz = (s) => { const v = s === undefined ? size() : s; if (!Number.isInteger(v) || v < 0 || v > size()) throw new EngineError('bad_range', 'size outside log'); return v; };
   const rootOf = (s) => merkleRoot(hashes.slice(0, sz(s)));
 
+  // Checked once when the log is opened: appending to a chain that does not verify would extend a damaged log.
+  const loadedOk = firstBadEntry(stored, hashes) < 0;
+  const chainOk = () => loadedOk;
+
   return {
     logId,
     append({ kind, ref } = {}) {
+      if (!chainOk(stored)) throw new EngineError('log_corrupt', 'the stored log does not verify; refusing to append', 500);
       const leaf = leafBytes({ kind, ref, ts: new Date(clock.now()).toISOString() });
       const lh = leafHash(leaf);
       const entry = { index: hashes.length, leaf, leafHash: lh, prev: lastHash };
@@ -156,13 +188,8 @@ export function createLog({ store, stream = 'log', logId, signer = null, clock =
     verifyChain() {
       const all = store.read(stream);
       if (all.length !== hashes.length) return { ok: false, at: Math.min(all.length, hashes.length) };
-      let prev = 'GENESIS';
-      for (let i = 0; i < all.length; i++) {
-        const e = all[i];
-        if (!e || e.index !== i || typeof e.leaf !== 'string' || e.prev !== prev || e.leafHash !== leafHash(e.leaf) || e.leafHash !== hashes[i] || e.hash !== entryHash(e)) return { ok: false, at: i };
-        prev = e.hash;
-      }
-      return { ok: true };
+      const bad = firstBadEntry(all, hashes);
+      return bad < 0 ? { ok: true } : { ok: false, at: bad };
     },
     findByRef(ref) {
       return store.read(stream).filter((e) => { try { return JSON.parse(e.leaf).ref === ref; } catch { return false; } });
@@ -175,7 +202,8 @@ export function verifyCheckpoint(checkpoint, verify) {
   try {
     const p = checkpoint?.payload;
     if (!p || typeof checkpoint.jws !== 'string' || typeof verify !== 'function') return false;
-    if (typeof p.logId !== 'string' || !isSize(p.size) || !okHex(p.rootHash) || typeof p.timestamp !== 'string') return false;
+    if (typeof p !== 'object' || Array.isArray(p) || Object.keys(p).sort().join() !== 'logId,rootHash,size,timestamp') return false;
+    if (typeof p.logId !== 'string' || !isSize(p.size) || !okHex(p.rootHash) || !isIsoTime(p.timestamp)) return false;
     return verify(checkpoint.jws, p, 'sanad-checkpoint+jws') === true;
   } catch { return false; }
 }
