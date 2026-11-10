@@ -30,8 +30,10 @@ export function dayNumber(iso: string): number {
 const levelOk = (v: unknown): v is Level => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 5;
 
 export interface Integrity { id: string; ok: boolean; reason: string }
-/** R1 as a function of its own (the page's verify panel shows it): every evidence hash, every attestation hash, reveal-against-commit and chain link. */
-export function checkIntegrity(cred: Credential): { evidence: Integrity[]; attestations: Integrity[] } {
+/** Options of R1. `verifySignature` (optional): returns true when the attestation's signature verifies. Without it signatures are not checked (v0.1 behaviour). */
+export interface RecogniseOptions { verifySignature?: (a: Attestation) => boolean }
+/** R1 as a function of its own (the page's verify panel shows it): every evidence hash, every attestation hash, reveal-against-commit and chain link, and the signature when a check is given. */
+export function checkIntegrity(cred: Credential, opts: RecogniseOptions = {}): { evidence: Integrity[]; attestations: Integrity[] } {
   const evs = [...cred.evidence].sort(byId), atts = [...cred.attestations].sort(byId);
   const evidence = evs.map((e): Integrity => {
     const why: string[] = [];
@@ -50,6 +52,7 @@ export function checkIntegrity(cred: Credential): { evidence: Integrity[]; attes
       if (attestationHashOf(a) !== a.hash) why.push('its content no longer matches its hash (changed after sealing)');
       if (commitOf(a) !== a.commit) why.push('the revealed mark does not match the commitment made before marking');
     }
+    if (opts.verifySignature) { let good = false; try { good = opts.verifySignature(a) === true; } catch { good = false; } if (!good) why.push('the signature does not verify'); }
     const expectPrev = i === 0 ? 'GENESIS' : atts[i - 1].hash;
     if (a.prev !== expectPrev) why.push('chain break: it does not link to the attestation before it');
     if (!evOk.has(a.evidence)) why.push('it attests evidence "' + a.evidence + '" that is not in the credential');
@@ -62,7 +65,7 @@ export function checkIntegrity(cred: Credential): { evidence: Integrity[]; attes
 
 interface Item { att: Attestation | null; attestor: string; level: Level; evidence: Evidence }
 
-export function recognise(cred: Credential, policy: Policy): Recognition {
+export function recognise(cred: Credential, policy: Policy, opts: RecogniseOptions = {}): Recognition {
   if (!(policy.halfLifeMonths > 0) || !Number.isFinite(policy.halfLifeMonths)) throw new RangeError('halfLifeMonths must be a positive number');
   const asOf = dayNumber(policy.asOf); if (Number.isNaN(asOf)) throw new RangeError('asOf must be an ISO date yyyy-mm-dd');
   const minAtt = Math.max(1, Math.floor(policy.minAttestors));
@@ -70,7 +73,7 @@ export function recognise(cred: Credential, policy: Policy): Recognition {
   const evs = [...cred.evidence].sort(byId), atts = [...cred.attestations].sort(byId);
 
   // ---- R1 integrity
-  const integ = checkIntegrity(cred);
+  const integ = checkIntegrity(cred, opts);
   const evBad = new Map(integ.evidence.filter((x) => !x.ok).map((x) => [x.id, x.reason]));
   const attBad = new Map(integ.attestations.filter((x) => !x.ok).map((x) => [x.id, x.reason]));
   steps.push({ rule: 'R1', summary: `Checked ${evs.length} evidence item(s) and ${atts.length} attestation(s): every hash, every reveal against its commitment, and the chain. ${evBad.size + attBad.size} failed.`, inputs: [...evs.map((e) => e.id), ...atts.map((a) => a.id)], effect: evBad.size + attBad.size ? 'failed items are ignored' : 'nothing ignored' });

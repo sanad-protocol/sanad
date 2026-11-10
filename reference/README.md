@@ -1,6 +1,8 @@
-# Sanad reference implementation (v0.1)
+# Sanad core (package `@sanad-protocol/core` 0.2.0, algorithm `sanad-0.1`)
 
-A small TypeScript implementation of the Sanad recognition function with no runtime dependencies, together with the conformance vectors. It is the reference for **Verifier**, **Issuer** and a part of **Log** conformance in the draft specification (`SANAD-SPEC-0.1`).
+A small TypeScript implementation of the Sanad recognition function with no runtime dependencies, together with the conformance vectors. It is the reference for **Verifier**, **Issuer** and a part of **Log** conformance in the specification (`SANAD-SPEC-0.1`). The Sanad engine (`engine/`) builds on it.
+
+Package version 0.2.0 implements the unchanged algorithm `sanad-0.1`: every vector gives the same result as in 0.1. New in 0.2.0: an optional signature check in R1 (`recognise(credential, policy, { verifySignature })`; without it the behaviour is that of 0.1), exported sealing helpers (`commitOf`, `attestationHashOf`, `sealEvidence`, `sealAttestations`, ...), type declarations (`dist/sanad-reference.d.ts`), an `exports` map and the command `sanad`.
 
 | File | Purpose |
 |---|---|
@@ -12,7 +14,8 @@ A small TypeScript implementation of the Sanad recognition function with no runt
 | `src/sample.ts` | The worked example of Appendix A of the specification |
 | `vectors.json` | 15 recognition vectors and 5 inference vectors with expected results |
 | `verify.mjs`, `run.mjs` | Command-line verifier (`verify.mjs`) and the function that runs every vector (`run.mjs`) |
-| `dist/sanad-reference.mjs` | One dependency-free ES module built by `build.mjs` |
+| `dist/sanad-reference.mjs`, `dist/sanad-reference.d.ts` | One dependency-free ES module built by `build.mjs` (committed), and its type declarations (kept in `types/`) |
+| `bin/sanad.mjs` | Command `sanad`: `run-vectors [file]`, `verify <credential.json> [--policy <file>]` (recognition only; signatures are checked by `sanad-engine verify`) |
 
 ## Run the vectors
 
@@ -34,5 +37,5 @@ Appendix A of the specification states a claim at level 4 with a practice run, a
 
 ## Notes
 
-- The signature field in the vectors is a placeholder string in v0.1; verification of real signatures is specified in section 4 of the specification and is not exercised by the vectors.
+- The signature field in the 20 vectors is a placeholder string; real Ed25519 signatures are produced and checked by the engine (`engine/`, vectors `engine/vectors/engine-*.json`).
 - Licence: Apache-2.0 (code) and CC BY 4.0 (the vectors and this text).
