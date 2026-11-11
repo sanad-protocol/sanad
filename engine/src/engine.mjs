@@ -8,7 +8,7 @@ import { assertTemplate, templateHash } from './template.mjs';
 import { checkCommit, checkReveal } from './commit.mjs';
 import { attestorStats } from './stats.mjs';
 import { createLog } from './log.mjs';
-import { sealBundle, buildCredential, verifyCredential as verifyDoc, ATTESTATION_TYP } from './bundle.mjs';
+import { sealBundle, bundleHashOf as hashBundle, buildCredential, verifyCredential as verifyDoc, ATTESTATION_TYP } from './bundle.mjs';
 
 const ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
 const DID_KEY = 'did:key:';
@@ -251,5 +251,3 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
   };
   return engine;
 }
-
-import { bundleHashOf as hashBundle } from './bundle.mjs';
