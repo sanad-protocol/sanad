@@ -25,18 +25,20 @@ Runtime dependencies: none. Node 22 or later (`node:crypto` Ed25519, `node:http`
 | `engine/src/keys.mjs` | Ed25519 key helpers, `did:key`, detached JWS, key resolver with DID documents (rotation, revocation) |
 | `engine/src/template.mjs` | Template schema and validator, template hash |
 | `engine/src/commit.mjs` | Commit and attestation statements, commit/reveal verification |
-| `engine/src/assessment.mjs` | Assessment state machine (create, invite, commit, reveal, finalize), deadlines, independence checks |
+| `engine/src/attestor.mjs` | Attestor-side helpers: `prepareCommit` and `prepareReveal` build and sign the statements on the attestor's own device; the engine never calls them with a key it holds |
 | `engine/src/bundle.mjs` | Evidence chain, credential sealing, bundle hash, issuer proof, `verifyCredential` |
 | `engine/src/log.mjs` | Transparency log (RFC 9162 Merkle tree, proofs, checkpoints, hash-chained entries) |
 | `engine/src/stats.mjs` | Attestor statistics (sittings, agreement) derived from finalized assessments |
 | `engine/src/store/` | Storage interface; `memory`, `file` (JSON files and JSON lines), `sqlite` (when `node:sqlite` exists) |
-| `engine/src/engine.mjs` | `createEngine(...)`: the library entry that ties the parts together (the exam-service adapter surface) |
-| `engine/src/http.mjs`, `engine/static/` | HTTP API and the demonstration page |
-| `engine/src/cli.mjs`, `engine/bin/sanad-engine` | CLI |
+| `engine/src/engine.mjs` | `createEngine(...)`: the library entry and the assessment state machine (create, invite, commit, reveal, finalize), deadlines and independence checks; there is no separate `assessment.mjs` (see section 14, item 11) |
+| `engine/src/http.mjs`, `engine/static/` | HTTP API and the demonstration page (`static/sanad-client.js` is the attestor helper for WebCrypto, tested against the engine in Node) |
+| `engine/src/cli.mjs`, `engine/bin/sanad-engine` | CLI (`main(argv, io)` returns an exit code; the bin file is three lines) |
 | `engine/src/demo-keys.mjs` | **Demonstration only**: generates and keeps attestor private keys so that a scripted run can play several attestors. Never imported by the engine core, HTTP server or library entry. |
-| `engine/examples/` | Three templates with scripted end-to-end runs |
-| `engine/vectors/engine-*.json` | Engine vectors (deterministic keys and clock) |
-| `engine/test/` | Unit, property and end-to-end tests (vitest) |
+| `engine/examples/` | Three templates (`*.template.json`) with scripted end-to-end runs (`run.mjs`), and `toy-host.mjs`, a toy platform that vendors the bundle (used by the integration tutorial) |
+| `engine/vectors/` | `engine-*.json` vectors (deterministic keys and clock), `harness.mjs`, `run.mjs`, `generate.mjs` |
+| `engine/test/` | Unit, property, end-to-end, HTTP, CLI, vector, bundle and principle-regression tests (vitest); `philosophy.test.mjs` fails if a design principle is changed |
+| `engine/index.d.ts` | Type declarations (not compiled by a TypeScript compiler in this repository's tests; a test checks that every declared name exists) |
+| `docs/INTEGRATION-TUTORIAL.md` (this folder: `engine/docs/`) | How to plug the engine into any system, in three modes |
 
 ## 3. Data formats
 
@@ -155,7 +157,7 @@ The validator refuses unknown members, levels outside 0..5, a live-sitting templ
 
 A host service keeps its own workflow (bookings, payments, rooms) and calls the library: `createEngine({ store, issuer: { did, kid, sign }, log, resolver, clock })`, then `registerTemplate`, `createAssessment`, `invite`, `commit`, `reveal`, `finalize`, `verifyCredential`, `stats`. It may share its SQLite database through the `sqlite` adapter with a table prefix. For portability the host **vendors** `engine/dist/sanad-engine.mjs` (one file, no dependencies) and records its SHA-256 and the source commit; a test in the host checks the hash. A path dependency on a local checkout is not portable and is not used.
 
-The Kamangir network service (first host): an examiner's device key is the attestor key (`did:key` of the raw public key); the browser signs the commit and the attestation; the committee's sitting is one `sitting` evidence item; the credential is issued at the Registrar's release and given to the candidate through the status token. Kamangir levels run 1..6 while Sanad levels run 0..5: the mapping is part of the Kamangir template (provisional: identity up to 5, 6 to 5), and the native mark is bound into the nonce (`kn1-<native level>-<random>`, within the nonce alphabet `[A-Za-z0-9_-]`) so that the two cannot drift apart. The mapping is an owner decision.
+An example host, to show how a platform maps its own concepts (the engine does not know this host and gives it no special status; any platform is one host among many): an examiner's device key is the attestor key (`did:key` of the raw public key); the browser signs the commit and the attestation; a committee's sitting is one `sitting` evidence item; the credential is issued when the host's registrar releases the result and is handed to the candidate by the host. If the host grades 1 to 6 while Sanad levels run 0 to 5, the mapping belongs to the host and to the template's optional `levelMap`; the host may bind its native mark into the nonce (for example `h1-<native level>-<random>`, within the nonce alphabet `[A-Za-z0-9_-]`) so that the two cannot drift apart. Choosing the mapping is the host's decision. `docs/INTEGRATION-TUTORIAL.md` walks through three modes (vendored library, sidecar HTTP service, verify-only) with a runnable toy host.
 
 ## 13. Test plan
 
@@ -173,3 +175,9 @@ The 20 core vectors pass unchanged (`node reference/verify.mjs`). New engine vec
 8. **Agreement statistic.** "Median of the other attestors" does not say which median for an even count, nor what agreement is with no co-attestor; the engine uses the lower median and 0. Spec 3.4 says "on the same sittings"; the engine counts every evidence item with at least two marks (sittings, artifacts, peer reviews). Which is meant needs a decision.
 9. **Credential proof.** Spec 6 does not say how the credential is secured; the engine uses a detached JWS. A W3C Data Integrity suite (`eddsa-jcs-2022`) would be the standard choice and is a candidate for a later version.
 10. **Log leaves.** Spec 8 logs attestation hashes; the engine also logs commits, missing reveals and bundle hashes, so that the order "all commits before any reveal" can be shown.
+11. **No `assessment.mjs`.** Section 2 of the first draft planned a separate state-machine module. The state machine is about 130 lines and shares the store, the log and the resolver with the rest of `engine.mjs`; splitting it would only have passed those through arguments. The functions that must run on the attestor's side (`attestor.mjs`) are separate, so that a client bundle never contains the operator code. No behaviour differs from section 4.
+12. **Subject form.** Section 4 said the subject is pseudonymous. The engine now enforces the form of a URN (`urn:<nid>:<opaque>`, no spaces, at most 200 characters), so that a name or an e-mail address is refused with `bad_subject`. A URN can still be chosen badly (`urn:person:ada`); the form check is a guard rail, not proof of pseudonymity.
+13. **Verify route pins the operator's issuer by default.** `POST /v1/verify` and `engine.verifyCredential` pin the engine's own issuer and log key unless the caller supplies `trustedIssuers` or `trustedLogKeys`. A verifier of credentials from other issuers must name the issuers and log keys it chooses to trust (the standalone `verifyCredential` and `sanad-engine verify` do not pin unless asked and then warn "issuer not pinned").
+14. **Bundle hash record.** `engine/build.mjs` writes `dist/sanad-engine.mjs.sha256`; a test compares the committed bundle with a fresh build and the record with the file. The bundle includes the HTTP server and the demonstration helper (`demo`); the CLI is not in the bundle.
+15. **Engine vectors are regression vectors.** They are generated by `vectors/generate.mjs` from this implementation and reviewed by hand; they are not an independent check, because no second implementation exists. They pin bundle hashes, log roots and refusal codes, so that a change in behaviour is visible.
+16. **CLI scope.** Operator commands act on a data directory (single process: not while `serve` runs on the same directory). Attestor commands (`commit`, `reveal`) keep the level and nonce in `<keyfile>.secrets.json` (mode 0600) next to the attestor's key; with `--url` they talk to a running server and send only signed statements.
