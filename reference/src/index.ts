@@ -6,7 +6,7 @@ export { sealCredential, sealEvidence, sealAttestations, evidenceHash, commitPay
 export type { AttestationDraft, EvidenceDraft } from './seal';
 export { applyTamper } from './tamper';
 export type { TamperOp } from './tamper';
-export { checkIntegrity, recognise, dayNumber, WEIGHT, CAP, QUALIFYING, REPLAY } from './recognise';
+export { checkIntegrity, recognise, policyProblems, assertPolicy, dayNumber, WEIGHT, CAP, QUALIFYING, REPLAY } from './recognise';
 export type { Integrity, RecogniseOptions } from './recognise';
 export { graphFromEdges, infer, explainInference } from './infer';
 export type { SkillGraph } from './infer';

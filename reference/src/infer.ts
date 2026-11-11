@@ -14,6 +14,8 @@ export function graphFromEdges(ids: readonly string[], edges: readonly number[])
 const round3 = (x: number) => Math.round(x * 1000) / 1000;
 
 export function infer(graph: SkillGraph, skill: string, level: Level, confidence: number, policy: Pick<Policy, 'maxInferenceDepth' | 'inferenceDecay'>, directClaims: Iterable<string> = []): Inferred[] {
+  if (!(Number.isInteger(policy.maxInferenceDepth) && policy.maxInferenceDepth >= 0)) throw new RangeError('maxInferenceDepth must be an integer of at least 0');
+  if (!(Number.isFinite(policy.inferenceDecay) && policy.inferenceDecay >= 0 && policy.inferenceDecay <= 1)) throw new RangeError('inferenceDecay must be a number from 0 to 1');
   const direct = new Set(directClaims); direct.add(skill);
   const out: Inferred[] = []; const seen = new Set<string>([skill]);
   let layer: { id: string; path: string[] }[] = [{ id: skill, path: [skill] }];

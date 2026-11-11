@@ -41,10 +41,13 @@ export type TamperOp = { attestation: string; set: Record<string, unknown> } | {
 export declare function applyTamper(c: Credential, ops: TamperOp[]): Credential;
 
 export interface Integrity { id: string; ok: boolean; reason: string }
-export interface RecogniseOptions { verifySignature?: (a: Attestation) => boolean }
+export interface RecogniseOptions { verifySignature?: (a: Attestation) => boolean; allowAttestor?: (did: string) => boolean }
 export declare function checkIntegrity(cred: Credential, opts?: RecogniseOptions): { evidence: Integrity[]; attestations: Integrity[] };
 export declare function recognise(cred: Credential, policy: Policy, opts?: RecogniseOptions): Recognition;
 export declare function dayNumber(iso: string): number;
+/** Every field of a policy is required (all seven and asOf); returns the problems, empty when the policy can be evaluated. */
+export declare function policyProblems(p: unknown): string[];
+export declare function assertPolicy(p: unknown): asserts p is Policy;
 export declare const WEIGHT: Record<EvidenceKind, number>;
 export declare const CAP: Record<EvidenceKind, Level>;
 export declare const QUALIFYING: readonly EvidenceKind[];
