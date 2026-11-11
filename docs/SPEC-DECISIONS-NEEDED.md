@@ -90,10 +90,84 @@ For each item: what the problem is, the options, and a recommendation. A recomme
 
 **Recommendation.** A for 1.0; B as an optional operator feature, never in the verifier path.
 
-## 10. Deviations in rules R5, R8 and the level cap, and the month length
+## 10. Deviations in rules R5 and R8, the level cap, and the month length
 
-**Problem.** The review compared the reference function with the specification text and found: R8 (inference) runs on a provisional result in the engine but the text suggests only on recognised ones; R5 counts distinct attestors without looking at their role (peer versus examiner); the provisional level cap is the best automatic or peer level, which the text does not state explicitly; the month is 30.4375 days in the reference and 30.436875 in the specification text (an independent checker used 365.2425/12).
+**Problem.** A review compared the reference function with the specification text and found: R8 (inference) runs on a provisional result in the engine, while the text suggests only on recognised ones; R5 counts distinct attestors without looking at their role (peer versus examiner); the provisional level cap is the best automatic or peer level, which the text does not state; and the month is 30.4375 days in the reference and 30.436875 in the specification text.
 
-**Options.** For each, either change the text to match the reference (and add a vector) or change the reference (the 20 vectors constrain most of these). The month length differs by less than the vector tolerance and should simply be fixed in the text.
+**The month length is not a harmless rounding.** The two values differ by about 0.002 percent, but evidence age is compared with a hard threshold (four half-lives, rule R2). Evidence dated 1461 days before the evaluation day with a half-life of 12 months is exactly 48 months at 30.4375 days and is kept; at 30.436875 days it is 48.0003 months and is dropped. A test (`reference/src/core-review.test.ts`, "month length") pins the reference's behaviour at this boundary. The constant has not been changed.
 
-**Recommendation.** Change the text to the reference for R5, the provisional cap and the month (30.4375), add one vector for each, and decide R8 on provisional results explicitly (recommended: do not run R8 on a provisional result).
+**Options.** For each deviation, either change the text to match the reference (and add a vector) or change the reference (the 20 vectors constrain most of these). For the month: errata choosing one value, with a vector at the boundary.
+
+**Recommendation.** Choose 30.4375 (365.25 / 12) in the text, add a boundary vector; change the text to the reference for R5 and the provisional cap and add a vector for each; decide R8 on provisional results explicitly (recommended: do not run R8 on a provisional result).
+
+## 11. Three rule changes in the core relative to the v0.1 reference
+
+**Problem.** The core (and so every credential evaluation by the engine) differs from the v0.1 reference in three rules, although the algorithm string is still `sanad-0.1`:
+1. a second mark by the same attestor on one evidence item is dropped under R1 (v0.1 counted every mark, so one attestor could move the lower median by signing several times);
+2. with the optional signature check, a failing signature drops the attestation under R1 (v0.1 did not check signatures, and R1 as written lists only hash, commit and chain failures);
+3. a policy must be complete and in range and `claimedLevel` must be 0 to 5, otherwise the function refuses with an error (v0.1 computed a result from whatever it was given).
+
+Smaller changes: the attestor name `replay` is reserved, statistics are read from own numeric properties, and an optional verifier allow-list exists. On credentials with duplicate marks the results differ from v0.1 (a review measured 2,500 of 20,000 random credentials); otherwise they match, and the 20 vectors match.
+
+**Options.**
+- A. Errata to v0.1: edit the v0.1 text to include these rules. Not possible without breaking the rule that the text of a version is frozen (SPEC section 10) and the deposited tag `spec-0.1-deposit-2026-11-07`.
+- B. A new algorithm id `sanad-0.2` for the engine's rule set, with a new specification version stating the three rules, new vectors (duplicate marks, failing signatures, partial policy), and `sanad-0.1` kept as the literal v0.1 behaviour for old credentials.
+- C. Revert the three rules and document the weaknesses of v0.1 (duplicate marks inflate the median, no signature check, silent defaults).
+
+**Recommendation.** B. The v0.1 text must not be edited. Until then the documents say plainly that the engine's behaviour differs and name how.
+
+## 12. Chain rule: what is dropped when a link fails
+
+**Problem.** The specification (R1) says: when an attestation's `prev` is not the stored hash of its predecessor, that attestation, and therefore also its honest successor, is dropped. The core drops only the attestation whose own link fails; its successor still links to the stored hash of the (tampered) predecessor and is kept. In a reviewer's worked example the credential is recognised at level 3 with confidence 0.783 under the core rule and is provisional with confidence 0.464 under the literal text.
+
+**Options.** A: change the text to the core's rule. B: change the core to the literal text (a conservative rule that loses honest attestations). C: drop the chain rule in favour of the bundle hash, which already covers every attestation.
+
+**Recommendation.** A or C: the successor is intact, the bundle hash and the signatures already catch any change, and the literal rule punishes honest attestors. A test pins the current behaviour.
+
+## 13. Normative verification limits
+
+Documents beyond these numbers are refused by the engine's verifier: 200 attestations, 200 evidence items, 2000 log entries, 100 DID histories per credential; 16 versions per DID history; 8 keys and 16 revocations per version. A verifier that accepts more is exposed to unbounded work. **Options:** make these the normative limits of `sanad-0.2`, or state them as implementation limits. **Recommendation:** normative, with the numbers in the specification.
+
+## 14. Ed25519 and JWS profile
+
+The engine verifies Ed25519 strictly per RFC 8032 (the scalar `S` must be below the group order; point encodings must be canonical; the check is cofactorless) and refuses public keys of small order everywhere, including `did:key`. JWS is detached compact with a canonical-JSON header of exactly `alg`, `kid`, `typ`; base64url without padding and only the canonical encoding. **Recommendation:** put this profile in the specification; independent verifiers that accept more will disagree on adversarial input.
+
+## 15. DID-history format and key validity
+
+A history is `{ id, versions: [{ version, validFrom, keys: [{ id: "#frag", publicKeyMultibase }], revoked: [{ id, from }] }] }`; `kid` is `<did>#<frag>`; keys are `z` + base58btc of the raw 32-byte key (no multicodec prefix); a key verifies a statement dated D if it is listed in the version in force on D and no revocation of it has `from <= D`. Version 1 is registered by the operator; later versions are signed by a key valid in the previous one. **Open:** the date is the statement's own, so a key holder can backdate (not detected); a role for the log (a timestamp the verifier can check) is not specified. **Recommendation:** specify the format; decide whether commit time in a log the verifier trusts must bound the statement date.
+
+## 16. Use of log timestamps
+
+Log entries carry the operator's time (monotonic in the engine). No verifier rule uses them. Whether a statement's `date` must be consistent with the log time of its commit is undecided. **Recommendation:** decide together with decision 1.
+
+## 17. Commit leaf `ref` and log leaf kinds
+
+The leaf of kind `commit` has `ref = SHA-256(canonical(commit statement))` (the signed payload), not the `commit` hash. **Recommendation:** specify it with decision 1.
+
+## 18. Range of `claimedLevel`
+
+Integer 0 to 5, enforced by the core and by the engine's shape check. **Recommendation:** state it in the specification.
+
+## 19. Effect of withheld reveals
+
+A commit without a reveal is recorded as `missing` and produces no attestation; the other attestations are evaluated as if the missing attestor had not sat. An attestor who sees the others' marks can therefore withhold their own (and, after the first reveal, declare a conflict; decision 3). **Options:** accept and document; require a minimum number of reveals before any reveal is public (a threshold reveal); count missing reveals in the statistics. **Recommendation:** document now; consider a threshold reveal for v1.0.
+
+## 20. Distinct attestors (R5) versus the per-item minimum
+
+R5 counts distinct admissible attestors across qualifying evidence; the template minimum applies per evidence item. A credential can satisfy one and not the other. **Recommendation:** state both rules in the specification and add a vector.
+
+## 21. Subject URN rule
+
+The engine accepts `urn:uuid:<RFC 4122 UUID>` and `urn:sanad:subject:<hex>` only. **Recommendation:** specify as a guard rail; free-text evidence fields are public and must not hold personal data.
+
+## 22. ECMAScript number formatting and duplicate keys
+
+Canonical JSON follows RFC 8785, so numbers use the ECMAScript shortest round-trip form and keys are ordered by UTF-16 code units. Duplicate keys in an object are not defined in JSON text; the engine's parser keeps the last, and implementations may differ. **Recommendation:** require rejection of duplicate keys in credentials and statements and of numbers beyond 2^53.
+
+## 23. Specification field names versus credentials
+
+The specification names attestation fields `evidenceId`, `reveal`, `sig` and evidence fields `claimId`, `takenOn`; credentials use `evidence`, `nonce`, `signature`, `date`, `summary`, `body`. **Recommendation:** follow the credentials and correct the text in the next version.
+
+## 24. Definition of `bundleHash` and the checkpoint key date
+
+`bundleHash = SHA-256(canonical({ alg, skill, claimedLevel, subject, evidence, attestations }))` with both lists in id order and complete; `attestors` (statistics) is outside it. The checkpoint's signing key is checked against the checkpoint's own timestamp date. **Recommendation:** specify both; consider covering the statistics or the template hash by the bundle hash (decision 4).
