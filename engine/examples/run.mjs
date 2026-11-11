@@ -30,7 +30,7 @@ export const SCENARIOS = {
     claimedLevel: 3,
     evidence: [
       { key: 'E1', date: '2026-03-02', summary: 'Live practical', body: { minutes: 60, nativeClaim: 'native-4' } },
-      { key: 'E2', date: '2026-03-02', summary: 'Bend test', body: { recordHash: '9d1c5b77', result: 'pass' } },
+      { key: 'E2', date: '2026-03-02', summary: 'Bend test', body: { recordHash: '9d1c5b77', result: 'pass', autoLevel: 3 } },
     ],
     marks: [{ role: 'examiner', evidence: 'E1', level: 3 }, { role: 'examiner', evidence: 'E1', level: 3 }, { role: 'observer', evidence: 'E1', level: 3 }],
   },

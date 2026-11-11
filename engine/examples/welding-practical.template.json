@@ -15,7 +15,7 @@
   "levelMap": { "g1": 0, "g2": 1, "g3": 2, "g4": 3, "g5": 4, "g6": 5 },
   "evidence": [
     { "key": "E1", "kind": "sitting", "summary": "Live practical, observed", "live": true, "minutes": 60 },
-    { "key": "E2", "kind": "auto", "summary": "Bend-test result from the rig (hash of the record in the body)" }
+    { "key": "E2", "kind": "auto", "summary": "Bend-test result from the rig (body: hash of the record and autoLevel, the level a replay yields)" }
   ],
   "attestors": { "min": 3, "max": 3, "roles": ["examiner", "observer"] },
   "liveSitting": true,

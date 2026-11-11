@@ -195,3 +195,12 @@ describe('HTTP: ticket, preview, removal, time', () => {
     expect((await call('GET', '/v1/assessments/as-1/ticket/as-1.a01')).status).toBe(404);
   });
 });
+
+describe('automatic evidence needs autoLevel', () => {
+  it('an auto item without body.autoLevel is refused at creation (the core would silently ignore it)', () => {
+    const s = H.setup({ tpl: H.template({ evidence: [{ key: 'E1', kind: 'sitting', summary: 's' }, { key: 'E2', kind: 'auto', summary: 'rig' }] }) });
+    const mk = (body) => s.engine.createAssessment({ id: 'x' + Math.random().toString(16).slice(2, 8), templateId: 'maths-oral-v1', subject: 'urn:uuid:7', claimedLevel: 3, evidence: [{ key: 'E1', date: '2026-03-01', summary: 's', body: {} }, { key: 'E2', date: '2026-03-01', summary: 'r', body }] });
+    H.code(() => mk({ result: 'pass' }), 'bad_evidence'); H.code(() => mk({ autoLevel: 9 }), 'bad_evidence');
+    expect(mk({ autoLevel: 3 }).evidence).toHaveLength(2);
+  });
+});

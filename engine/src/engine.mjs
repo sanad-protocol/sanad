@@ -120,6 +120,7 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
         if (e.body === null || typeof e.body !== 'object' || Array.isArray(e.body)) throw err('bad_evidence', 'evidence ' + e.key + ': body must be an object');
         const kind = plan.get(e.key).kind;
         if (('kind' in e.body && e.body.kind !== kind) || ('date' in e.body && e.body.date !== e.date)) throw err('bad_evidence', 'evidence ' + e.key + ': body.kind and body.date must equal the item kind and date');
+        if (kind === 'auto' && !(Number.isInteger(e.body.autoLevel) && e.body.autoLevel >= 0 && e.body.autoLevel <= 5)) throw err('bad_evidence', 'evidence ' + e.key + ': an automatic record needs body.autoLevel, an integer from 0 to 5 (the level a replay yields); without it the recognition function ignores the item');
         const body = { ...clone(e.body), kind, date: e.date };
         sealed.push(sealEvidence({ id: `${aid}.${e.key}`, kind, date: e.date, summary: e.summary, body }));
       }
