@@ -11,6 +11,7 @@ import { createLog } from './log.mjs';
 import { sealBundle, bundleHashOf as hashBundle, buildCredential, verifyCredential as verifyDoc, ATTESTATION_TYP } from './bundle.mjs';
 
 const ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
+const SUBJECT_RE = /^urn:[a-z0-9][a-z0-9-]{0,31}:[^\s]{1,160}$/i;
 const DID_KEY = 'did:key:';
 const COMMIT_TYP = 'sanad-commit+jws';
 const HOUR = 3600000;
@@ -85,7 +86,7 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       const rec = typeof templateId === 'string' && ID_RE.test(templateId) ? store.get('templates', templateId) : null;
       if (!rec) throw err('template_unknown', 'no such template: ' + templateId, 404);
       const t = rec.template;
-      if (typeof subject !== 'string' || subject.length === 0 || subject.length > 200) throw err('bad_assessment', 'subject must be a non-empty string of up to 200 characters');
+      if (typeof subject !== 'string' || !SUBJECT_RE.test(subject)) throw err('bad_subject', 'subject must be a pseudonymous URN such as urn:uuid:<uuid> (up to 200 characters, no spaces); names and contact details do not belong in the engine');
       if (!Number.isInteger(claimedLevel) || claimedLevel < 0 || claimedLevel > 5) throw err('bad_assessment', 'claimedLevel must be an integer from 0 to 5');
       const aid = id ?? 'as-' + randomBytes(8).toString('hex');
       if (typeof aid !== 'string' || !ID_RE.test(aid) || aid.length > 150) throw err('bad_assessment', 'id must match ' + ID_RE + ' and be at most 150 characters');
