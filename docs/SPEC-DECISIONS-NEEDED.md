@@ -171,3 +171,17 @@ The specification names attestation fields `evidenceId`, `reveal`, `sig` and evi
 ## 24. Definition of `bundleHash` and the checkpoint key date
 
 `bundleHash = SHA-256(canonical({ alg, skill, claimedLevel, subject, evidence, attestations }))` with both lists in id order and complete; `attestors` (statistics) is outside it. The checkpoint's signing key is checked against the checkpoint's own timestamp date. **Recommendation:** specify both; consider covering the statistics or the template hash by the bundle hash (decision 4).
+
+## 25. Voiding an assessment and extending a deadline
+
+**Problem.** Once an assessment exists its deadlines are fixed and it can only end by finalizing (possibly with the operator's recorded shortfall override) or by staying open. There is no way to void an assessment (for example the examiners never came, or it was started for the wrong subject), and no way to extend `commitBy` or `revealBy` (the engine has no such operation, and a host that set short deadlines must start a new assessment). A stuck assessment leaves open invitations and an unfinishable record. The rehearsal of a first host ran into both.
+
+**Behaviour today (unchanged).** No void, no extension. A host sets deadlines generously, or opens a new assessment; an unfinished one stays in the store.
+
+**Options.**
+- A. **Void event.** An operator action `void(assessment, reason)` that appends a `void` leaf to the log and a record to the events stream, closes the assessment to commits, reveals and finalize, and makes the engine refuse to issue a credential for it. A verifier of any later credential is unaffected; a verifier asked about that assessment id can see the void leaf. This needs a new log leaf kind and a rule about voiding after reveals have begun (marks already public).
+- B. **Extension.** An operator action `extend(assessment, commitBy?, revealBy?)` that may only move a deadline later, is logged, and is refused after any reveal exists (otherwise a commit window could be reopened after marks are public). The credential would carry the extension in `process`. This keeps one record but lets an operator keep an assessment open at will.
+- C. **New assessment only (current).** Keep both absent; recommend generous deadlines and a new assessment, and document that unfinished assessments are abandoned, not voided.
+
+**Recommendation.** A for voiding, restricted to assessments with no reveal yet (after the first reveal the only ends are finalize, with its recorded shortfall, or abandonment), together with C for deadlines (a new assessment): extension reopens the blind phase and is the more dangerous of the two. Decide together with decision 1, since both change the log leaf kinds.
+

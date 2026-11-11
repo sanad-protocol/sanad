@@ -83,6 +83,9 @@ def didkey_pub(did):
     assert did.startswith('did:key:z'); raw=b58dec(did[9:]); assert raw[:2]==b'\xed\x01' and len(raw)==34, 'not ed25519 did:key'
     return raw[2:]
 def verify_jws(jws,payload,typ,signer_did,pub=None):
+    try: return _verify_jws(jws,payload,typ,signer_did,pub)
+    except Exception: return False   # any malformed input is a failed verification, never a crash
+def _verify_jws(jws,payload,typ,signer_did,pub=None):
     h,mid,sg=jws.split('.'); assert mid=='' , 'attached payload'
     hb=b64u_dec(h); hdr=json.loads(hb.decode('utf-8'))
     assert hb.decode()==canon(hdr), 'header not canonical'
@@ -182,9 +185,42 @@ def check(path,pol):
     # recognition
     st,lvl,conf=recognise(b,pol)
     return res,(st,lvl,conf)
+def parse_args(argv):
+    o={'file':None,'asof':'2026-03-03','half':36.0,'issuer':None,'logkey':None,'allow':False}
+    it=iter(argv); pos=[]
+    for a in it:
+        if a=='--as-of': o['asof']=next(it)
+        elif a=='--half-life': o['half']=float(next(it))
+        elif a=='--issuer': o['issuer']=next(it)
+        elif a=='--log-key': o['logkey']=next(it)
+        elif a=='--allow-unpinned': o['allow']=True
+        else: pos.append(a)
+    if not pos: raise SystemExit('usage: xcheck.py <credential.json> [--as-of YYYY-MM-DD] [--half-life MONTHS] --issuer <did> --log-key <did> | --allow-unpinned')
+    o['file']=pos[0]
+    return o
+
 if __name__=='__main__':
-    pol={'minAttestors':2,'requireLive':True,'halfLifeMonths':36,'minAttestorSittings':0,'minAgreement':0,'maxInferenceDepth':2,'inferenceDecay':0.8,'asOf':sys.argv[3] if len(sys.argv)>3 else '2026-03-03'}
-    res,rec=check(sys.argv[1],pol)
+    o=parse_args(sys.argv[1:])
+    pol={'minAttestors':2,'requireLive':True,'halfLifeMonths':o['half'],'minAttestorSittings':0,'minAgreement':0,'maxInferenceDepth':2,'inferenceDecay':0.8,'asOf':o['asof']}
+    rec=None
+    try:
+        res,rec=check(o['file'],pol)
+    except Exception as e:
+        res=[('crash: the credential could not be examined (%s: %s)'%(type(e).__name__,str(e)[:120]),False,'')]
+    # pins: without them the credential is only checked for internal consistency, which any engine can satisfy
+    try:
+        c=json.load(open(o['file'])); issuer=c.get('issuer'); logkey=c.get('sanad',{}).get('log',{}).get('logKey')
+    except Exception: issuer=logkey=None
+    if o['issuer'] is None and o['logkey'] is None and not o['allow']:
+        res.append(('pins: no --issuer and --log-key given; pass them, or --allow-unpinned to accept internal consistency only',False,''))
+    else:
+        if o['issuer'] is not None: res.append(('pin-issuer',issuer==o['issuer'],'credential issuer %s'%issuer))
+        elif not o['allow']: res.append(('pins: --issuer missing',False,''))
+        if o['logkey'] is not None: res.append(('pin-log-key',logkey==o['logkey'],'credential log key %s'%logkey))
+        elif not o['allow']: res.append(('pins: --log-key missing',False,''))
     bad=[r for r in res if not r[1]]
     for n,v,dtl in res: print(('PASS ' if v else 'FAIL ')+n+(' '+dtl if dtl else ''))
-    print('python recognition',rec,'| failures:',len(bad))
+    if rec is not None: print('python recognition',rec,'| failures:',len(bad))
+    else: print('no recognition computed | failures:',len(bad))
+    if o['allow']: print('NOTE internal consistency only: issuer and log key were not pinned (--allow-unpinned)')
+    sys.exit(1 if bad else 0)

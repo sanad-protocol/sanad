@@ -206,8 +206,7 @@ end
 
 # ---------- Verifier ----------
 class Verifier
-  ASOF = ENV.fetch("ASOF", "2026-03-12")
-  POLICY = { 'minAttestors' => 2, 'requireLive' => true, 'halfLifeMonths' => (ENV['HALFLIFE'] || '24').to_f, 'minAttestorSittings' => 0,
+  POLICY = { 'minAttestors' => 2, 'requireLive' => true, 'halfLifeMonths' => 24.0, 'minAttestorSittings' => 0,
              'minAgreement' => 0, 'maxInferenceDepth' => 0, 'inferenceDecay' => 0.7 }
   MONTH_DAYS = (ENV['MONTH'] || '30.4375').to_f # the core's value; the specification text says 30.436875 (docs/SPEC-DECISIONS-NEEDED.md, decision 10)
   CAPS = { 'auto' => 3, 'peer' => 3, 'artifact' => 4, 'sitting' => 5 }
@@ -216,7 +215,11 @@ class Verifier
   EV_KEYS = %w[id kind date summary body hash]
 
   attr_reader :checks
-  def initialize(cred, pin); @c = cred; @pin = pin; @checks = []; end
+  # opts: :asof (YYYY-MM-DD), :half_life (months), :issuer and :log_key (pinned DIDs), :allow_unpinned
+  def initialize(cred, pin, opts = {})
+    @c = cred; @pin = pin; @checks = []; @opts = opts
+    @asof = opts[:asof] || "2026-03-12"; @half = (opts[:half_life] || 24).to_f
+  end
   def chk(name, ok, detail); @checks << [name, ok, detail]; ok; end
 
   def did_key_bytes(did)
@@ -271,7 +274,7 @@ class Verifier
 
   def run
     c = @c; s = c['sanad']; b = s['bundle']
-    pol = POLICY.merge('asOf' => ASOF)
+    pol = POLICY.merge('asOf' => @asof, 'halfLifeMonths' => @half)
     # shape
     shape = c['type'] == %w[VerifiableCredential SanadCredential] && c['issuer'].is_a?(String) && s && b
     chk "shape", shape, "credential document structure"
@@ -285,7 +288,7 @@ class Verifier
         "credentialSubject equals bundle subject/skill/claimedLevel"
     chk "proof-created=validFrom", c['proof']['created'] == c['validFrom'], "#{c['proof']['created']} vs #{c['validFrom']}"
     # pins (just report)
-    chk "pins-reported", true, "issuer=#{c['issuer']} logKey=#{s['log']['logKey']} (pinned = values in credential)"
+    pin_checks(c['issuer'], s['log']['logKey'])
     # issuer proof
     vm = c['proof']['verificationMethod']
     pl = c.reject { |k, _| k == 'proof' }
@@ -359,28 +362,46 @@ class Verifier
     recognise(pol, b, evs, atts, ev_ok, att_fail)
   end
 
+  # Without pins a credential is only checked for internal consistency, which any engine can satisfy: that is a FAIL unless --allow-unpinned.
+  def pin_checks(issuer, log_key)
+    o = @opts
+    if o[:issuer].nil? && o[:log_key].nil? && !o[:allow_unpinned]
+      chk "pins", false, "no --issuer and --log-key given; pass them, or --allow-unpinned to accept internal consistency only"
+      return
+    end
+    if o[:issuer] then chk "pin-issuer", issuer == o[:issuer], "credential issuer #{issuer}"
+    elsif !o[:allow_unpinned] then chk "pins", false, "--issuer missing" end
+    if o[:log_key] then chk "pin-log-key", log_key == o[:log_key], "credential log key #{log_key}"
+    elsif !o[:allow_unpinned] && o[:issuer] then chk "pins", false, "--log-key missing" end
+  end
+
   def verify_log(s, atts, evs, bh, stated_bh)
     lg = s['log']; ents = lg['entries']; cp = lg['checkpoint']; pl = cp['payload']
     chk "log-checkpoint-signature", (r = verify_jws(cp['jws'], 'sanad-checkpoint+jws', pl, lg['logKey'], pl['timestamp'][0, 10]))[0], r[1]
     chk "log-id", pl['logId'] == lg['logId'], "#{pl['logId']} vs #{lg['logId']}"
-    chk "log-entries-count", ents.length == pl['size'] && ents.each_with_index.all? { |e, i| e['index'] == i }, "#{ents.length} entries, checkpoint size #{pl['size']}"
+    # The embedded entries are the leaves this credential needs, not the whole log: a second assessment on the same log has a checkpoint
+    # larger than its entries. Indexes must be distinct, increasing and inside the checkpoint size; each leaf is proved by its own inclusion proof.
+    idx = ents.map { |e| e['index'] }
+    chk "log-entries", idx.all? { |i| i.is_a?(Integer) && i >= 0 && i < pl['size'] } && idx == idx.uniq.sort, "#{ents.length} embedded entr#{ents.length == 1 ? 'y' : 'ies'} of a log of #{pl['size']} leaves, indexes #{idx.inspect}"
     leaves = ents.map { |e| e['leaf'] }
     parsed = leaves.map { |l| (JSON.parse(l) rescue nil) }
     canon_ok = parsed.each_with_index.all? { |pj, i| pj.is_a?(Hash) && pj.keys.sort == %w[kind ref ts] && Canon.enc(pj) == leaves[i] }
     chk "log-leaf-canonical", canon_ok, "each leaf is canonical {kind,ref,ts}"
     hs = leaves.map { |l| Merkle.leaf(l) }
     rb = [pl['rootHash']].pack('H*')
-    chk "log-root-recomputed", Merkle.root(hs).unpack('H*')[0] == pl['rootHash'], "root over all #{hs.length} embedded leaves"
+    if idx == (0...pl['size']).to_a
+      chk "log-root-recomputed", Merkle.root(hs).unpack('H*')[0] == pl['rootHash'], "root over all #{hs.length} leaves (the credential holds the whole log)"
+    end
     ps = lg['proofs']
     bad = []
-    ents.each_with_index do |e, i|
-      pr = ps.find { |x| x['index'] == i }
-      ok = pr && pr['size'] == pl['size'] && Merkle.verify_incl(i, pl['size'], hs[i], pr['proof'].map { |h| [h].pack('H*') }, rb)
-      bad << i unless ok
+    ents.each_with_index do |e, k|
+      pr = ps.find { |x| x['index'] == e['index'] }
+      ok = pr && pr['size'] == pl['size'] && Merkle.verify_incl(e['index'], pl['size'], hs[k], pr['proof'].map { |h| [h].pack('H*') }, rb)
+      bad << e['index'] unless ok
     end
     chk "log-inclusion-proofs", bad.empty?, bad.empty? ? "all #{ents.length} verify (RFC 9162) against checkpoint root" : "failed indexes #{bad}"
     return unless canon_ok
-    by = ->(k) { parsed.each_with_index.select { |pj, _| pj['kind'] == k }.map { |pj, i| [pj['ref'], i, pj['ts']] } }
+    by = ->(k) { parsed.each_with_index.select { |pj, _| pj['kind'] == k }.map { |pj, i| [pj['ref'], ents[i]['index'], pj['ts']] } }
     att_leaves = by.('attestation'); com = by.('commit'); miss = by.('missing-reveal'); bun = by.('bundle')
     missing_att = atts.reject { |a| att_leaves.any? { |l| l[0] == a['hash'] } }
     chk "log-attestation-leaves", missing_att.empty? && att_leaves.length == atts.length,
@@ -488,10 +509,21 @@ if $0 == __FILE__
     puts "selftest canon: #{Canon.enc({ 'b' => 1.5, 'a' => [1e21, 1e-7, 100.0, 0.000001, 123456789012345680000.0, -0.0, "\u0001\u00e9/"] })}"
     exit 0
   end
-  file = ARGV[0] or abort("usage: ruby sanad_verify.rb <credential.json> <asOf> [halfLifeMonths]")
-  ENV['ASOF'] = ARGV[1] if ARGV[1]
-  ENV['HALFLIFE'] = ARGV[2] if ARGV[2]
-  v = Verifier.new(JSON.parse(File.read(file)), ENV['PINNED_DIDWEB_KEY'])
+  # usage: sanad_verify.rb <credential.json> [asOf] [halfLifeMonths] [--as-of D] [--half-life N] [--issuer DID] [--log-key DID] [--allow-unpinned]
+  args = ARGV.dup; opts = {}; pos = []
+  until args.empty?
+    a = args.shift
+    case a
+    when '--as-of' then opts[:asof] = args.shift
+    when '--half-life' then opts[:half_life] = args.shift
+    when '--issuer' then opts[:issuer] = args.shift
+    when '--log-key' then opts[:log_key] = args.shift
+    when '--allow-unpinned' then opts[:allow_unpinned] = true
+    else pos << a end
+  end
+  file = pos[0] or abort("usage: ruby sanad_verify.rb <credential.json> [asOf] [halfLifeMonths] [--issuer DID --log-key DID | --allow-unpinned]")
+  opts[:asof] ||= pos[1]; opts[:half_life] ||= pos[2]
+  v = Verifier.new(JSON.parse(File.read(file)), ENV['PINNED_DIDWEB_KEY'], opts)
   begin
     v.run
   rescue => e

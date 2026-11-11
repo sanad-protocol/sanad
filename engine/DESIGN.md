@@ -260,6 +260,8 @@ The 20 core vectors pass unchanged (`node reference/verify.mjs`). New engine vec
 39. **Commit and finalize are retry-safe.** A commit's log leaf is appended once (a retry after a crash between the append and the save finds it); finalize likewise (item 27).
 40. **Evidence keys** that look like attestation ids (`a01`, `a02`, ...) are refused in templates, so evidence ids and attestation ids cannot collide.
 
+41. **Cross-checkers (Python and Ruby).** They verify with their own Ed25519, canonical JSON, RFC 9162 and recognition code. They require the issuer and log key to be pinned (`--issuer`, `--log-key`) or an explicit `--allow-unpinned` (internal consistency only), because any engine's credential is internally consistent; they handle a credential whose embedded log entries are a subset of a larger log (every credential after the first on a shared log); and a malformed input ends in a failed check, not a crash. The confidence they print equals the engine's when the same policy and evaluation day are used (tests compare them at three days); a gap seen once (0.933 against 0.936) came from the Ruby verifier's defaults being used (2026-03-12 and half-life 24 months), not from rounding or month length.
+
 ## 15. Notes for a second implementer
 
 A second implementation (the Python cross-check in `engine/test/crosscheck/` is one) needs these points, which the first draft of this document left implicit:

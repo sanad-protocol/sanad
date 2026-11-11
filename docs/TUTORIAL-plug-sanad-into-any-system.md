@@ -239,7 +239,7 @@ A third provider, whether a different transport or a second implementation of th
 
 ## 15. What is tested and what is not
 
-Tested in this repository (`npx vitest run`, `node engine/vectors/run.mjs`): the library, the bundle (identical to a fresh build, no imports other than built-ins), the HTTP API in process, the CLI in process and through its script, the page's static properties, the browser attestor helper against the engine in Node, the three example runs, the toy host, the port contract suite on the embedded and HTTP providers, nine deterministic vectors, and the principle regressions (`engine/test/philosophy.test.mjs`).
+Tested in this repository (`npx vitest run`, `node engine/vectors/run.mjs`): the library, the bundle (identical to a fresh build, no imports other than built-ins), the HTTP API in process, the CLI in process and through its script, the page's static properties, the browser attestor helper against the engine in Node, the three example runs, the toy host, two independent cross-checkers in Python and Ruby (pinned issuer and log key required, shared-log credentials, a pinned explanation of their confidence agreement with the engine; see `engine/test/crosscheck/README.md`), the port contract suite on the embedded and HTTP providers, nine deterministic vectors, and the principle regressions (`engine/test/philosophy.test.mjs`).
 
 Untested:
 
