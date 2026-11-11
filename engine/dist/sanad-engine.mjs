@@ -1980,6 +1980,7 @@ function prepareReveal({ signer, assessment, attestationId, secret, date, confli
 // engine/src/engine.mjs
 import { randomBytes as randomBytes2 } from "node:crypto";
 var ID_RE2 = /^[A-Za-z0-9._:-]{1,200}$/;
+var SUBJECT_RE = /^urn:[a-z0-9][a-z0-9-]{0,31}:[^\s]{1,160}$/i;
 var DID_KEY3 = "did:key:";
 var COMMIT_TYP = "sanad-commit+jws";
 var HOUR = 36e5;
@@ -2057,7 +2058,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       const rec = typeof templateId === "string" && ID_RE2.test(templateId) ? store.get("templates", templateId) : null;
       if (!rec) throw err("template_unknown", "no such template: " + templateId, 404);
       const t = rec.template;
-      if (typeof subject !== "string" || subject.length === 0 || subject.length > 200) throw err("bad_assessment", "subject must be a non-empty string of up to 200 characters");
+      if (typeof subject !== "string" || !SUBJECT_RE.test(subject)) throw err("bad_subject", "subject must be a pseudonymous URN such as urn:uuid:<uuid> (up to 200 characters, no spaces); names and contact details do not belong in the engine");
       if (!Number.isInteger(claimedLevel) || claimedLevel < 0 || claimedLevel > 5) throw err("bad_assessment", "claimedLevel must be an integer from 0 to 5");
       const aid = id ?? "as-" + randomBytes2(8).toString("hex");
       if (typeof aid !== "string" || !ID_RE2.test(aid) || aid.length > 150) throw err("bad_assessment", "id must match " + ID_RE2 + " and be at most 150 characters");
@@ -2268,12 +2269,206 @@ function createDemoAttestor(name, seed) {
   const signer = makeSigner(kp.privateKey);
   return { name, did: signer.did, kid: signer.kid, signer, privateKeyPkcs8: exportPrivateKey(kp.privateKey) };
 }
+
+// engine/src/http.mjs
+import { createServer } from "node:http";
+import { createHash as createHash3, timingSafeEqual } from "node:crypto";
+import { readFileSync as readFileSync2 } from "node:fs";
+import { dirname, join as join2 } from "node:path";
+import { fileURLToPath } from "node:url";
+var BODY_LIMIT = 256 * 1024;
+var HERE = dirname(fileURLToPath(import.meta.url));
+var STATIC_DIR = join2(HERE, "../static");
+var FILES = { "/": ["index.html", "text/html; charset=utf-8"], "/app.js": ["app.js", "text/javascript; charset=utf-8"], "/sanad-client.js": ["sanad-client.js", "text/javascript; charset=utf-8"], "/style.css": ["style.css", "text/css; charset=utf-8"] };
+var CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+var SECURITY = { "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "cache-control": "no-store" };
+var MAX_ENTRIES = 1e3;
+var err2 = (code, message, status = 400) => new EngineError(code, message, status);
+var sha2 = (s) => createHash3("sha256").update(s).digest();
+var isObj5 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const ct = String(req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
+    if (ct !== "application/json") return reject(err2("unsupported_media_type", "content-type must be application/json", 415));
+    const chunks = [];
+    let n = 0;
+    let dead = false;
+    req.on("data", (c) => {
+      if (dead) return;
+      n += c.length;
+      if (n > BODY_LIMIT) {
+        dead = true;
+        reject(err2("body_too_large", "the body is larger than " + BODY_LIMIT + " bytes", 413));
+        return;
+      }
+      chunks.push(c);
+    });
+    req.on("end", () => {
+      if (dead) return;
+      try {
+        const v = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        resolve(v);
+      } catch {
+        reject(err2("bad_json", "the body is not valid JSON"));
+      }
+    });
+    req.on("error", () => {
+      if (!dead) {
+        dead = true;
+        reject(err2("bad_request", "the request could not be read"));
+      }
+    });
+  });
+}
+var intParam = (q, name, def) => {
+  const v = q.get(name);
+  if (v === null) return def;
+  if (!/^\d{1,9}$/.test(v)) throw err2("bad_query", name + " must be a non-negative integer");
+  return Number(v);
+};
+function createHttpServer({ engine, operatorToken, serveStatic = true } = {}) {
+  if (!engine) throw err2("bad_config", "an engine is required");
+  if (typeof operatorToken !== "string" || operatorToken.length < 16) throw err2("bad_config", "operatorToken must be a string of at least 16 characters");
+  const tokenHash = sha2(operatorToken);
+  const staticCache = /* @__PURE__ */ new Map();
+  const staticFile = (name) => {
+    if (!staticCache.has(name)) staticCache.set(name, readFileSync2(join2(STATIC_DIR, name)));
+    return staticCache.get(name);
+  };
+  const operator = (req) => {
+    const h = String(req.headers.authorization ?? "");
+    const m = /^Bearer (.+)$/.exec(h);
+    if (!m || !timingSafeEqual(sha2(m[1]), tokenHash)) throw err2("unauthorized", "a valid operator token is required", 401);
+  };
+  const routes = [];
+  const route = (method, path, handler, op = false) => routes.push({ method, parts: path.split("/").slice(1), handler, op });
+  route("GET", "/healthz", () => ({ ok: true }));
+  route("GET", "/v1/info", () => engine.info());
+  route("POST", "/v1/templates", ({ body }) => engine.registerTemplate(body), true);
+  route("GET", "/v1/templates", () => engine.listTemplates());
+  route("GET", "/v1/templates/:id", ({ p }) => engine.getTemplate(p.id));
+  route("POST", "/v1/dids", ({ body }) => {
+    if (isObj5(body) && "did" in body && "version" in body && "jws" in body) return engine.updateDid(body.did, body.version, body.jws);
+    return engine.registerDid(body);
+  }, true);
+  route("GET", "/v1/dids/:did", ({ p }) => {
+    const d = engine.resolver.get(p.did);
+    if (!d) throw err2("did_unknown", "DID not registered: " + p.did, 404);
+    return d;
+  });
+  route("POST", "/v1/assessments", ({ body }) => engine.createAssessment(body), true);
+  route("GET", "/v1/assessments", () => engine.listAssessments(), true);
+  route("GET", "/v1/assessments/:id", ({ p }) => engine.getAssessment(p.id));
+  route("POST", "/v1/assessments/:id/invite", ({ p, body }) => engine.invite(p.id, body), true);
+  route("POST", "/v1/assessments/:id/commit", ({ p, body }) => engine.commit(p.id, body));
+  route("POST", "/v1/assessments/:id/reveal", ({ p, body }) => engine.reveal(p.id, body));
+  route("POST", "/v1/assessments/:id/finalize", ({ p }) => engine.finalize(p.id), true);
+  route("GET", "/v1/credentials/:id", ({ p }) => engine.getCredential(p.id));
+  route("POST", "/v1/verify", ({ body }) => {
+    if (!isObj5(body) || !("credential" in body)) throw err2("bad_request", "the body must be { credential, policy?, trustedIssuers?, trustedLogKeys?, asOf? }");
+    const opts = {};
+    if (body.policy !== void 0) {
+      if (!isObj5(body.policy)) throw err2("bad_request", "policy must be an object");
+      opts.policy = body.policy;
+    }
+    for (const k of ["trustedIssuers", "trustedLogKeys"]) {
+      if (body[k] === void 0) continue;
+      if (!Array.isArray(body[k]) || !body[k].every((x) => typeof x === "string")) throw err2("bad_request", k + " must be a list of strings");
+      opts[k] = body[k];
+    }
+    if (body.asOf !== void 0) {
+      if (typeof body.asOf !== "string") throw err2("bad_request", "asOf must be a string");
+      opts.asOf = body.asOf;
+    }
+    return engine.verifyCredential(body.credential, opts);
+  });
+  route("GET", "/v1/log/checkpoint", () => engine.log.checkpoint());
+  route("GET", "/v1/log/entries", ({ q }) => {
+    const size = engine.log.size();
+    const from = intParam(q, "from", 0), to = Math.min(intParam(q, "to", size), size, from + MAX_ENTRIES);
+    if (from > to) throw err2("bad_query", "from must not exceed to");
+    return { size, from, to, entries: engine.log.entries(from, to) };
+  });
+  route("GET", "/v1/log/inclusion", ({ q }) => {
+    const index = intParam(q, "index", null);
+    if (index === null) throw err2("bad_query", "index is required");
+    const size = intParam(q, "size", engine.log.size());
+    if (size > engine.log.size() || index >= size) throw err2("bad_query", "index and size must lie inside the log");
+    return engine.log.inclusion(index, size);
+  });
+  route("GET", "/v1/log/consistency", ({ q }) => {
+    const m = intParam(q, "m", null);
+    if (m === null) throw err2("bad_query", "m is required");
+    const n = intParam(q, "n", engine.log.size());
+    if (n > engine.log.size() || m > n) throw err2("bad_query", "m and n must satisfy m <= n <= log size");
+    return engine.log.consistency(m, n);
+  });
+  route("GET", "/v1/attestors/:did/stats", ({ p }) => engine.stats(p.did));
+  const match = (method, segs) => {
+    let pathSeen = false;
+    for (const r of routes) {
+      if (r.parts.length !== segs.length) continue;
+      const p = {};
+      let ok = true;
+      for (let i = 0; i < segs.length; i++) {
+        if (r.parts[i].startsWith(":")) p[r.parts[i].slice(1)] = segs[i];
+        else if (r.parts[i] !== segs[i]) {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok) continue;
+      pathSeen = true;
+      if (r.method === method) return { r, p };
+    }
+    return pathSeen ? "method" : null;
+  };
+  const send = (res, status, body, headers = {}) => {
+    const data = typeof body === "string" || Buffer.isBuffer(body) ? body : JSON.stringify(body);
+    res.writeHead(status, { ...SECURITY, "content-length": Buffer.byteLength(data), ...headers });
+    res.end(data);
+  };
+  return createServer(async (req, res) => {
+    try {
+      const url = new URL(req.url ?? "/", "http://localhost");
+      const method = req.method ?? "GET";
+      if (serveStatic && method === "GET" && FILES[url.pathname]) {
+        const [name, type] = FILES[url.pathname];
+        return send(res, 200, staticFile(name), { "content-type": type, "content-security-policy": CSP });
+      }
+      let segs;
+      try {
+        segs = url.pathname.split("/").slice(1).map((s) => decodeURIComponent(s));
+      } catch {
+        throw err2("bad_path", "the path is not valid");
+      }
+      const m = match(method, segs);
+      if (m === null) throw err2("not_found", "no such route", 404);
+      if (m === "method") throw err2("method_not_allowed", "method not allowed", 405);
+      if (m.r.op) operator(req);
+      const body = method === "POST" ? await readBody(req) : void 0;
+      const out = await m.r.handler({ p: m.p, q: url.searchParams, body, req });
+      return send(res, 200, out, { "content-type": "application/json; charset=utf-8" });
+    } catch (e) {
+      const known = e instanceof EngineError;
+      const status = known ? e.status : 500;
+      const payload = known ? { error: e.code, message: e.message } : { error: "internal", message: "internal error" };
+      if (known && e.reason) payload.reason = e.reason;
+      if (!known) process.emitWarning?.("sanad-engine internal error: " + (e?.stack ?? e));
+      if (!res.headersSent) send(res, status, payload, { "content-type": "application/json; charset=utf-8" });
+      else res.end();
+    }
+  });
+}
 export {
   ATTESTATION_TYP,
+  BODY_LIMIT,
   CREDENTIAL_TYP,
+  CSP,
   DID_UPDATE_TYP,
   EngineError,
   NONCE_RE,
+  STATIC_DIR,
   assertTemplate,
   attestationStatement,
   attestorStats,
@@ -2290,6 +2485,7 @@ export {
   core_exports as core,
   createEngine,
   createFileStore,
+  createHttpServer,
   createLog,
   createMemoryStore,
   createResolver,

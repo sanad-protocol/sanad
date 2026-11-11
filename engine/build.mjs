@@ -22,6 +22,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const text = await bundleText();
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(OUT, text);
+  const sum = createHash('sha256').update(text).digest('hex');
+  writeFileSync(OUT + '.sha256', sum + '  sanad-engine.mjs\n');
   console.log('engine/dist/sanad-engine.mjs');
-  console.log('sha256 ' + createHash('sha256').update(text).digest('hex'));
+  console.log('sha256 ' + sum);
 }

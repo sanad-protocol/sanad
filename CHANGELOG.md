@@ -18,9 +18,12 @@
 - Transparency log (RFC 9162) with inclusion and consistency proofs and signed checkpoints.
 - Attestor statistics.
 - Storage adapters: memory, file, SQLite.
+- Single-file bundle `dist/sanad-engine.mjs` with recorded SHA-256; type declarations.
+- Integration tutorial (library, sidecar, verify-only); principle-regression tests.
+- Subjects must be pseudonymous URNs (`bad_subject` otherwise).
 - HTTP API, command-line tool `sanad-engine` and a demonstration page.
-- Three example assessments (mathematics oral examination, practical craft test, language speaking test).
-- Engine vectors in `engine/vectors/`.
+- Three example assessments (mathematics oral examination, software testing portfolio, practical welding test) and a toy host.
+- Six deterministic engine vectors in `engine/vectors/`.
 
 ### Website
 
