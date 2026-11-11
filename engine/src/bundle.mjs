@@ -87,7 +87,7 @@ function shapeProblems(doc) {
   if (!exactly(s, ['bundle', 'template', 'assessment', 'process', 'policy', 'log', 'dids'])) { p.push('sanad members must be exactly bundle, template, assessment, process, policy, log, dids'); return p; }
   need(exactly(s.template, ['id', 'hash']), 'sanad.template members');
   need(isStr(s.assessment), 'sanad.assessment must be a string');
-  need(exactly(s.process, ['invited', 'committed', 'revealed', 'missing', 'late', 'notCommitted']), 'sanad.process members');
+  need(exactly(s.process, ['invited', 'committed', 'revealed', 'missing', 'late', 'notCommitted']) || (exactly(s.process, ['invited', 'committed', 'revealed', 'missing', 'late', 'notCommitted', 'removed']) && Array.isArray(s.process.removed) && s.process.removed.every(isStr)), 'sanad.process members');
   need(exactly(s.policy, ['id', ...POLICY_KEYS]), 'sanad.policy members');
   need(Array.isArray(s.dids) && s.dids.every((d) => exactly(d, ['id', 'versions']) && isStr(d.id) && Array.isArray(d.versions)), 'sanad.dids must be a list of { id, versions }');
   const l = s.log;

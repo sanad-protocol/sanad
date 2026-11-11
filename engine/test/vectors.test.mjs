@@ -8,8 +8,8 @@ const dir = fileURLToPath(new URL('../vectors/', import.meta.url));
 const files = readdirSync(dir).filter((f) => /^engine-.*\.json$/.test(f)).sort();
 
 describe('engine vectors (section 13)', () => {
-  it('the six vector files of the design exist', () => {
-    expect(files).toEqual(['engine-commit-reveal.json', 'engine-duplicate-attestor.json', 'engine-key-rotation.json', 'engine-late-reveal.json', 'engine-missing-reveal.json', 'engine-tamper.json']);
+  it('the vector files of the design (six of section 13 and three added later) exist', () => {
+    expect(files).toEqual(['engine-commit-reveal.json', 'engine-duplicate-attestor.json', 'engine-invitation-removed.json', 'engine-key-rotation.json', 'engine-late-reveal.json', 'engine-missing-reveal.json', 'engine-native-level-map.json', 'engine-preview-ticket.json', 'engine-tamper.json']);
   });
   for (const f of files) {
     it(f + ': every step matches its recorded expectation', () => {

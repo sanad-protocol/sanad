@@ -12,7 +12,7 @@
     { "level": 4, "label": "Sound weld at speed" },
     { "level": 5, "label": "Qualified to instruct" }
   ],
-  "levelMap": { "native-1": 0, "native-2": 1, "native-3": 2, "native-4": 3, "native-5": 4, "native-6": 5 },
+  "levelMap": { "g1": 0, "g2": 1, "g3": 2, "g4": 3, "g5": 4, "g6": 5 },
   "evidence": [
     { "key": "E1", "kind": "sitting", "summary": "Live practical, observed", "live": true, "minutes": 60 },
     { "key": "E2", "kind": "auto", "summary": "Bend-test result from the rig (hash of the record in the body)" }

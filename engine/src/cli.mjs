@@ -20,6 +20,9 @@ const USAGE = `sanad-engine <command>
   invite <assessment> --attestor <did> --evidence <key> [--role <role>]
   commit <assessment> <attestationId> --key <file> --level <n> [--url <server>]
   reveal <assessment> <attestationId> --key <file> [--date <YYYY-MM-DD>] [--conflict] [--url <server>]
+  uninvite <assessment> <attestationId> [--reason <text>]   withdraw an invitation before that attestor's first commit
+  preview <assessment> [--policy <file>]      provisional recognition over revealed attestations only
+  ticket <assessment> <attestationId>         the signing ticket for an attestor's client
   finalize <assessment> [--out <file>]
   verify <credential.json> [--policy <file>] [--issuer <did>] [--log-key <did>]
   log checkpoint | log inclusion --index <i> [--size <n>] | log consistency --m <m> [--n <n>]
@@ -189,6 +192,9 @@ export async function main(argv, io = {}) {
         const role = opt.role ?? engine.getTemplate(a.templateId).attestors.roles[0];
         json(engine.invite(aid, { attestor: need(opt, 'attestor'), role, evidence: need(opt, 'evidence') })); return 0;
       }
+      if (cmd === 'uninvite') { if (!rest[0] || !rest[1]) throw new Usage('uninvite needs <assessment> <attestationId>'); json(engine.removeInvitation(rest[0], rest[1], { reason: opt.reason })); return 0; }
+      if (cmd === 'preview') { if (!rest[0]) throw new Usage('preview needs an assessment id'); json(engine.previewRecognition(rest[0], { policy: opt.policy ? readJson(opt.policy) : undefined })); return 0; }
+      if (cmd === 'ticket') { if (!rest[0] || !rest[1]) throw new Usage('ticket needs <assessment> <attestationId>'); json(engine.ticketFor(rest[0], rest[1])); return 0; }
       if (cmd === 'finalize') {
         const aid = rest[0]; if (!aid) throw new Usage('finalize needs an assessment id');
         const doc = engine.finalize(aid);

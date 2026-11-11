@@ -43,6 +43,10 @@ export async function attestorFromKeyPair({ privateKey, publicKey }) {
 
 export const newNonce = () => b64u(crypto.getRandomValues(new Uint8Array(16)));
 
+// A signing ticket (GET /v1/assessments/:id/ticket/:attestationId) may stand in for the assessment view.
+const viewOf = (assessment, ticket) => (ticket ? { id: ticket.assessment, templateHash: ticket.templateHash, invitations: [{ attestationId: ticket.attestationId, attestor: ticket.attestor, role: ticket.role, evidence: ticket.evidence }] } : assessment);
+const NATIVE = /^[A-Za-z0-9]{1,16}$/;
+
 const invitationOf = (assessment, attestationId, did) => {
   const inv = (assessment.invitations ?? []).find((i) => i.attestationId === attestationId);
   if (!inv) throw new Error('no invitation ' + attestationId);
@@ -51,7 +55,14 @@ const invitationOf = (assessment, attestationId, did) => {
 };
 
 /** Returns { request, secret }. Keep `secret` on the device; post `request` to /commit. */
-export async function prepareCommit({ attestor, assessment, attestationId, level, nonce = newNonce() }) {
+export async function prepareCommit({ attestor, assessment, ticket, attestationId, level, native, levelMap, nonce }) {
+  assessment = viewOf(assessment, ticket); attestationId ??= ticket?.attestationId; levelMap ??= ticket?.levelMap;
+  if (native !== undefined) {
+    if (!NATIVE.test(String(native)) || !levelMap || !Object.hasOwn(levelMap, String(native))) throw new Error('native mark not in the levelMap');
+    if (level !== undefined && level !== levelMap[native]) throw new Error('level and native mark disagree');
+    level = levelMap[native]; nonce ??= 'nm-' + native + '-' + newNonce();
+  }
+  nonce ??= newNonce();
   const inv = invitationOf(assessment, attestationId, attestor.did);
   if (!Number.isInteger(level) || level < 0 || level > 5) throw new Error('level must be 0..5');
   const commit = await sha256Hex(canonical({ attestor: inv.attestor, evidence: inv.evidence, level, nonce }));
@@ -60,7 +71,8 @@ export async function prepareCommit({ attestor, assessment, attestationId, level
 }
 
 /** Returns the body for /reveal. */
-export async function prepareReveal({ attestor, assessment, attestationId, secret, date, conflictDeclared = false }) {
+export async function prepareReveal({ attestor, assessment, ticket, attestationId, secret, date, conflictDeclared = false }) {
+  assessment = viewOf(assessment, ticket); attestationId ??= ticket?.attestationId;
   const inv = invitationOf(assessment, attestationId, attestor.did);
   const commit = await sha256Hex(canonical({ attestor: inv.attestor, evidence: inv.evidence, level: secret.level, nonce: secret.nonce }));
   const statement = { id: attestationId, attestor: inv.attestor, evidence: inv.evidence, level: secret.level, role: inv.role, conflictDeclared, date, commit, nonce: secret.nonce };

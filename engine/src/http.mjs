@@ -81,6 +81,12 @@ export function createHttpServer({ engine, operatorToken, serveStatic = true } =
   route('GET', '/v1/assessments', () => engine.listAssessments(), true);
   route('GET', '/v1/assessments/:id', ({ p }) => engine.getAssessment(p.id));
   route('POST', '/v1/assessments/:id/invite', ({ p, body }) => engine.invite(p.id, body), true);
+  route('GET', '/v1/assessments/:id/ticket/:att', ({ p }) => engine.ticketFor(p.id, p.att));
+  route('POST', '/v1/assessments/:id/preview', ({ p, body }) => {
+    if (!isObj(body)) throw err('bad_request', 'the body must be an object, optionally { policy }');
+    return engine.previewRecognition(p.id, { policy: body.policy });
+  });
+  route('POST', '/v1/assessments/:id/invitations/:att/remove', ({ p, body }) => engine.removeInvitation(p.id, p.att, { reason: isObj(body) ? body.reason : undefined }), true);
   route('POST', '/v1/assessments/:id/commit', ({ p, body }) => engine.commit(p.id, body));
   route('POST', '/v1/assessments/:id/reveal', ({ p, body }) => engine.reveal(p.id, body));
   route('POST', '/v1/assessments/:id/finalize', ({ p }) => engine.finalize(p.id), true);

@@ -155,7 +155,7 @@ export function validateTemplate(t) {
   if ('levelMap' in t) {
     if (!isObj(t.levelMap)) errors.push('levelMap: must be an object');
     else for (const [k, v] of Object.entries(t.levelMap)) {
-      if (k === '') errors.push('levelMap: empty key');
+      if (!/^[A-Za-z0-9]{1,16}$/.test(k)) errors.push('levelMap: key "' + k + '" must be 1 to 16 letters or digits (it is written into the nonce)');
       if (k in Object.prototype) errors.push('levelMap: key "' + k + '" is reserved');
       if (!isLevel(v)) errors.push('levelMap.' + k + ': must be an integer from 0 to 5');
     }
@@ -196,4 +196,26 @@ export function policyFromTemplate(t, asOf) {
     minAttestors: p.minAttestors, requireLive: p.requireLive, halfLifeMonths: p.halfLifeMonths, minAttestorSittings: p.minAttestorSittings,
     minAgreement: p.minAgreement, maxInferenceDepth: p.maxInferenceDepth, inferenceDecay: p.inferenceDecay, asOf,
   };
+}
+
+const NATIVE_NONCE = /^nm-([A-Za-z0-9]{1,16})-[A-Za-z0-9_-]{16,}$/;
+/**
+ * levelMap (optional template member): host-native mark label -> Sanad level 0..5. It is a convention, not a second source of truth:
+ * the attestor may write the native mark into the nonce (nm-<native>-<random>), which stays hidden until the reveal, so blind commit is unchanged.
+ * When a template has a levelMap and a revealed nonce carries a native mark, the engine requires levelMap[native] to equal the revealed level.
+ * The mapping itself is not applied by the engine to any mark and never reveals or changes one.
+ */
+export function levelFromNative(levelMap, native) {
+  if (!levelMap || typeof levelMap !== 'object' || !Object.hasOwn(levelMap, String(native))) throw new EngineError('native_unknown', 'the levelMap has no native mark ' + native, 400);
+  return levelMap[String(native)];
+}
+/** nm-<native>-<random>, with the random part at least 16 characters. */
+export function nonceWithNative(native, random) {
+  if (!/^[A-Za-z0-9]{1,16}$/.test(String(native))) throw new EngineError('bad_nonce', 'native mark must be 1 to 16 letters or digits');
+  return 'nm-' + native + '-' + random;
+}
+/** The native mark carried by a nonce, or null. */
+export function nativeOfNonce(nonce) {
+  const m = typeof nonce === 'string' ? NATIVE_NONCE.exec(nonce) : null;
+  return m ? m[1] : null;
 }

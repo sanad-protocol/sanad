@@ -66,12 +66,27 @@ export function runVector(vector) {
           const stored = engine.getAssessment(aid, { view: 'operator' }).commits[step.copyFrom];
           e = errCode(() => { r = engine.commit(aid, { attestationId: step.att, payload: stored.payload, jws: stored.jws }); });
         } else {
-          const prep = prepareCommit({ signer: P.signer, assessment: view(), attestationId: step.att, level: step.level, nonce: step.nonce });
-          P.secrets[step.att] = prep.secret;
-          e = errCode(() => { r = engine.commit(aid, prep.request); });
+          e = errCode(() => {
+            const prep = prepareCommit({ signer: P.signer, ticket: step.viaTicket ? engine.ticketFor(aid, step.att) : undefined, assessment: view(), attestationId: step.att, level: step.level, native: step.native, levelMap: vector.setup.template.levelMap, nonce: step.nonce });
+            P.secrets[step.att] = prep.secret;
+            r = engine.commit(aid, prep.request);
+          });
         }
         observed = e ? { error: e } : { committed: r.committed, of: r.of }; break;
       }
+      case 'removeInvitation': {
+        let r; const e = errCode(() => { r = engine.removeInvitation(aid, step.att); });
+        observed = e ? { error: e } : r; break;
+      }
+      case 'preview': {
+        const p = engine.previewRecognition(aid, step.policy ? { policy: step.policy } : {});
+        observed = { provisional: p.provisional, policySource: p.policySource, counts: p.counts, recognition: compact(p.recognition), used: p.recognition.used.attestations }; break;
+      }
+      case 'ticket': {
+        const t = engine.ticketFor(aid, step.att);
+        observed = { attestor: t.attestor === P?.signer.did ? 'matches' : 'other', evidence: t.evidence, levels: t.levels, levelMap: t.levelMap ?? null, serverDay: t.serverDay, revealOpen: t.revealOpen, templateHash: t.templateHash }; break;
+      }
+      case 'info': { const i = engine.info(); observed = { time: i.time, today: i.today }; break; }
       case 'advance': ctx.advance(step.hours); observed = { advancedHours: step.hours }; break;
       case 'reveal': {
         let r; let e;
