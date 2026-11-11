@@ -999,7 +999,7 @@ function validateTemplate(t) {
   if ("levelMap" in t) {
     if (!isObj3(t.levelMap)) errors.push("levelMap: must be an object");
     else for (const [k, v] of Object.entries(t.levelMap)) {
-      if (k === "") errors.push("levelMap: empty key");
+      if (!/^[A-Za-z0-9]{1,16}$/.test(k)) errors.push('levelMap: key "' + k + '" must be 1 to 16 letters or digits (it is written into the nonce)');
       if (k in Object.prototype) errors.push('levelMap: key "' + k + '" is reserved');
       if (!isLevel(v)) errors.push("levelMap." + k + ": must be an integer from 0 to 5");
     }
@@ -1044,6 +1044,19 @@ function policyFromTemplate(t, asOf) {
     inferenceDecay: p.inferenceDecay,
     asOf
   };
+}
+var NATIVE_NONCE = /^nm-([A-Za-z0-9]{1,16})-[A-Za-z0-9_-]{16,}$/;
+function levelFromNative(levelMap, native) {
+  if (!levelMap || typeof levelMap !== "object" || !Object.hasOwn(levelMap, String(native))) throw new EngineError("native_unknown", "the levelMap has no native mark " + native, 400);
+  return levelMap[String(native)];
+}
+function nonceWithNative(native, random) {
+  if (!/^[A-Za-z0-9]{1,16}$/.test(String(native))) throw new EngineError("bad_nonce", "native mark must be 1 to 16 letters or digits");
+  return "nm-" + native + "-" + random;
+}
+function nativeOfNonce(nonce) {
+  const m = typeof nonce === "string" ? NATIVE_NONCE.exec(nonce) : null;
+  return m ? m[1] : null;
 }
 
 // engine/src/stats.mjs
@@ -1794,7 +1807,7 @@ function shapeProblems(doc) {
   }
   need(exactly2(s.template, ["id", "hash"]), "sanad.template members");
   need(isStr3(s.assessment), "sanad.assessment must be a string");
-  need(exactly2(s.process, ["invited", "committed", "revealed", "missing", "late", "notCommitted"]), "sanad.process members");
+  need(exactly2(s.process, ["invited", "committed", "revealed", "missing", "late", "notCommitted"]) || exactly2(s.process, ["invited", "committed", "revealed", "missing", "late", "notCommitted", "removed"]) && Array.isArray(s.process.removed) && s.process.removed.every(isStr3), "sanad.process members");
   need(exactly2(s.policy, ["id", ...POLICY_KEYS]), "sanad.policy members");
   need(Array.isArray(s.dids) && s.dids.every((d) => exactly2(d, ["id", "versions"]) && isStr3(d.id) && Array.isArray(d.versions)), "sanad.dids must be a list of { id, versions }");
   const l = s.log;
@@ -1954,14 +1967,27 @@ function verifyCredential(doc, opts = {}) {
 }
 
 // engine/src/attestor.mjs
+function fromTicket(t) {
+  return { id: t.assessment, templateHash: t.templateHash, invitations: [{ attestationId: t.attestationId, attestor: t.attestor, role: t.role, evidence: t.evidence }] };
+}
+var viewOf = (assessment, ticket) => ticket ? fromTicket(ticket) : assessment;
 function invitationOf(assessment, attestationId, signer) {
   const inv2 = (assessment?.invitations ?? []).find((i) => i.attestationId === attestationId);
   if (!inv2) throw new EngineError("not_invited", "the assessment has no invitation " + attestationId, 403);
   if (inv2.attestor !== signer.did) throw new EngineError("not_invited", "the invitation " + attestationId + " is for " + inv2.attestor + ", not for " + signer.did, 403);
   return inv2;
 }
-function prepareCommit({ signer, assessment, attestationId, level, nonce }) {
+function prepareCommit({ signer, assessment, ticket, attestationId, level, native, levelMap, nonce }) {
+  assessment = viewOf(assessment, ticket);
+  attestationId ??= ticket?.attestationId;
+  levelMap ??= ticket?.levelMap;
   const inv2 = invitationOf(assessment, attestationId, signer);
+  if (native !== void 0) {
+    const mapped = levelFromNative(levelMap, native);
+    if (level !== void 0 && level !== mapped) throw new EngineError("native_mismatch", "level and native mark disagree");
+    level = mapped;
+    nonce ??= nonceWithNative(native, newNonce());
+  }
   if (!Number.isInteger(level) || level < 0 || level > 5) throw new EngineError("bad_level", "level must be an integer from 0 to 5");
   const n = nonce ?? newNonce();
   if (!NONCE_RE.test(n)) throw new EngineError("bad_nonce", "nonce must be 22 to 128 base64url characters");
@@ -1969,7 +1995,9 @@ function prepareCommit({ signer, assessment, attestationId, level, nonce }) {
   const payload = commitStatement({ assessment: assessment.id, attestationId, attestor: inv2.attestor, evidence: inv2.evidence, role: inv2.role, commit, templateHash: assessment.templateHash });
   return { request: { attestationId, payload, jws: signer.sign("sanad-commit+jws", payload) }, secret: { attestationId, level, nonce: n } };
 }
-function prepareReveal({ signer, assessment, attestationId, secret, date, conflictDeclared = false }) {
+function prepareReveal({ signer, assessment, ticket, attestationId, secret, date, conflictDeclared = false }) {
+  assessment = viewOf(assessment, ticket);
+  attestationId ??= ticket?.attestationId;
   const inv2 = invitationOf(assessment, attestationId, signer);
   if (!secret || secret.attestationId !== attestationId) throw new EngineError("bad_secret", "the secret does not belong to " + attestationId);
   const commit = commitFor({ attestor: inv2.attestor, evidence: inv2.evidence, level: secret.level, nonce: secret.nonce });
@@ -2015,7 +2043,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     const reveals = {};
     if (open) for (const [k, r] of Object.entries(a.reveals)) reveals[k] = { statement: r.statement, jws: r.jws, at: r.at };
     const { id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, late, state, credentialId } = a;
-    return clone3({ id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, commits, reveals, late, state, credentialId: credentialId ?? null, revealOpen: open });
+    return clone3({ id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, removed: a.removed ?? [], commits, reveals, late, state, credentialId: credentialId ?? null, revealOpen: open });
   }
   const finalizedStats = (excludeId) => {
     const records = [];
@@ -2116,12 +2144,28 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       if (attestor === a.subject) throw err("subject_as_attestor", "the subject cannot attest their own work");
       const same = a.invitations.filter((i) => i.evidence === ev.id);
       if (same.some((i) => i.attestor === attestor)) throw err("duplicate_attestor", "this attestor is already invited on " + ev.id, 409);
-      if (same.length >= t.attestors.max || a.invitations.length >= 99) throw err("too_many_attestors", "at most " + t.attestors.max + " attestors per evidence item", 409);
+      const seq = (a.seq ?? a.invitations.length) + 1;
+      if (same.length >= t.attestors.max || seq > 99) throw err("too_many_attestors", "at most " + t.attestors.max + " attestors per evidence item", 409);
       if (res.keysAt(attestor, today()).length === 0) throw err("did_unresolvable", "no valid key for " + attestor + " today");
-      const inv2 = { attestationId: `${a.id}.a${String(a.invitations.length + 1).padStart(2, "0")}`, attestor, role, evidence: ev.id, invitedAt: nowIso() };
+      const inv2 = { attestationId: `${a.id}.a${String(seq).padStart(2, "0")}`, attestor, role, evidence: ev.id, invitedAt: nowIso() };
       a.invitations.push(inv2);
+      a.seq = seq;
       save(a);
       return clone3(inv2);
+    },
+    /** Operator action: withdraw an invitation before that attestor's first commit. Never reuses the attestation id; recorded in the events stream and in the credential's process.removed. */
+    removeInvitation(assessmentId, attestationId, { reason } = {}) {
+      const a = getRec(assessmentId);
+      if (a.state !== "open") throw err("state", "the assessment is finalized", 409);
+      const i = a.invitations.findIndex((x) => x.attestationId === attestationId);
+      if (i < 0) throw err("not_invited", "no invitation " + attestationId, 404);
+      if (a.commits[attestationId]) throw err("already_committed", "a commit for " + attestationId + " exists; an invitation cannot be removed after the first commit", 409);
+      if (reason !== void 0 && (typeof reason !== "string" || reason.length > 200)) throw err("bad_reason", "reason must be a string of up to 200 characters");
+      const [inv2] = a.invitations.splice(i, 1);
+      (a.removed ??= []).push({ attestationId, attestor: inv2.attestor, role: inv2.role, evidence: inv2.evidence, removedAt: nowIso() });
+      store.append("events", { type: "invitation-removed", assessment: a.id, attestationId, attestor: inv2.attestor, at: nowIso(), ...reason ? { reason } : {} });
+      save(a);
+      return { removed: attestationId, invited: a.invitations.length };
     },
     commit(assessmentId, { attestationId, payload, jws } = {}) {
       const a = getRec(assessmentId);
@@ -2164,6 +2208,11 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         revealDay: today(),
         allowedLevels: t.levels.map((l) => l.level)
       });
+      const nat = nativeOfNonce(statement.nonce);
+      if (nat !== null && t.levelMap) {
+        if (!Object.hasOwn(t.levelMap, nat)) throw err("native_unknown", "the nonce names a native mark that the template levelMap does not list");
+        if (t.levelMap[nat] !== statement.level) throw err("native_mismatch", "the native mark in the nonce maps to a different level than the revealed level");
+      }
       const r = res.verifyStatement({ jws, payload: statement, typ: ATTESTATION_TYP, signer: inv2.attestor, date: statement.date });
       if (!r.ok) throw sigFail(r);
       a.reveals[attestationId] = { statement: clone3(statement), jws, at: nowIso() };
@@ -2207,7 +2256,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         checkpoint: cp
       };
       const dids = [.../* @__PURE__ */ new Set([issuer.did, logSigner.did, ...attestors])].filter((d) => !d.startsWith(DID_KEY3)).map((d) => res.get(d)).filter(Boolean);
-      const process2 = { invited: a.invitations.length, committed: committed.length, revealed: revealed.length, missing, late: [...a.late], notCommitted };
+      const process2 = { invited: a.invitations.length, committed: committed.length, revealed: revealed.length, missing, late: [...a.late], notCommitted, ...(a.removed ?? []).length ? { removed: a.removed.map((r) => r.attestationId).sort() } : {} };
       const doc = buildCredential({
         bundle,
         issuer,
@@ -2248,7 +2297,81 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     log,
     resolver: res,
     info() {
-      return { engine: "0.2.0", alg: "sanad-0.1", issuer: issuer.did, logId, logKey: logSigner.did };
+      return { engine: "0.2.0", alg: "sanad-0.1", issuer: issuer.did, logId, logKey: logSigner.did, time: nowIso(), today: today() };
+    },
+    /**
+     * Read-only preview of recognition over the attestations revealed so far. It never reads an unrevealed mark (a commit holds no readable mark):
+     * only the number of attestors still pending is returned. The result is always marked provisional and names whose policy produced it.
+     */
+    previewRecognition(assessmentId, { policy } = {}) {
+      const a = getRec(assessmentId);
+      const t = engine.getTemplate(a.templateId);
+      if (policy !== void 0 && (policy === null || typeof policy !== "object" || Array.isArray(policy))) throw err("bad_policy", "policy must be an object");
+      const base = policy ? { ...policy } : policyFromTemplate(t, today());
+      delete base.id;
+      const pol = { ...base, asOf: policy?.asOf ?? today() };
+      const revealed = Object.keys(a.reveals).sort();
+      const hist = finalizedStats(a.id), stats = {};
+      for (const k of revealed) {
+        const d = a.reveals[k].statement.attestor;
+        stats[d] = hist[d] ?? { sittings: 0, agreement: 0 };
+      }
+      const bundle = sealBundle({
+        skill: t.skill.id,
+        claimedLevel: a.claimedLevel,
+        subject: a.subject,
+        evidence: a.evidence,
+        attestations: revealed.map((k) => ({ statement: a.reveals[k].statement, signature: a.reveals[k].jws })),
+        attestors: stats
+      });
+      let recognition;
+      try {
+        recognition = recognise(bundle, pol);
+      } catch (e) {
+        throw err("bad_policy", "the recognition function refused the policy: " + (e?.message ?? e));
+      }
+      return {
+        preview: true,
+        provisional: true,
+        state: a.state,
+        policySource: policy ? "verifier-supplied" : "template-recommendation",
+        counts: { invited: a.invitations.length, committed: Object.keys(a.commits).length, revealed: revealed.length, pending: Object.keys(a.commits).length - revealed.length, notCommitted: a.invitations.length - Object.keys(a.commits).length },
+        recognition,
+        note: "Computed only from revealed attestations; marks not yet revealed are not read. Not a credential: the final result can differ once the remaining attestors reveal or the deadline passes."
+      };
+    },
+    /** What a host hands one attestor's client so it can sign the commit and the attestation (DESIGN section 8a). Contains no secret. */
+    ticketFor(assessmentId, attestationId) {
+      const a = getRec(assessmentId);
+      const inv2 = a.invitations.find((i) => i.attestationId === attestationId);
+      if (!inv2) throw err("not_invited", "no invitation " + attestationId, 404);
+      const t = engine.getTemplate(a.templateId);
+      const ev = a.evidence.find((e) => e.id === inv2.evidence);
+      return clone3({
+        ticketVersion: 1,
+        alg: "sanad-0.1",
+        assessment: a.id,
+        attestationId,
+        attestor: inv2.attestor,
+        role: inv2.role,
+        evidence: inv2.evidence,
+        templateHash: a.templateHash,
+        levels: t.levels.map((l) => l.level),
+        ...t.levelMap ? { levelMap: t.levelMap } : {},
+        commitBy: a.commitBy,
+        revealBy: a.revealBy,
+        state: a.state,
+        revealOpen: revealOpen(a) || a.state === "finalized",
+        serverTime: nowIso(),
+        serverDay: today(),
+        rules: {
+          nonce: { pattern: NONCE_RE.source, minLength: 22, hint: "16 random bytes as base64url; optional native-mark form nm-<native>-<random> when the template has a levelMap" },
+          date: { format: "YYYY-MM-DD", notBefore: ev.date, notAfter: "the host day at the moment of the reveal (use serverDay from the same provider)" },
+          level: "integer listed in levels"
+        },
+        commit: { typ: "sanad-commit+jws", members: ["type", "assessment", "attestationId", "attestor", "evidence", "role", "commit", "templateHash"], type: "sanad-commit", commit: "sha256(canonical({attestor, evidence, level, nonce})) as 64 lowercase hex", post: `/v1/assessments/${a.id}/commit` },
+        attestation: { typ: "sanad-attestation+jws", members: ["id", "attestor", "evidence", "level", "role", "conflictDeclared", "date", "commit", "nonce"], id: attestationId, post: `/v1/assessments/${a.id}/reveal` }
+      });
     }
   };
   return engine;
@@ -2360,6 +2483,12 @@ function createHttpServer({ engine, operatorToken, serveStatic = true } = {}) {
   route("GET", "/v1/assessments", () => engine.listAssessments(), true);
   route("GET", "/v1/assessments/:id", ({ p }) => engine.getAssessment(p.id));
   route("POST", "/v1/assessments/:id/invite", ({ p, body }) => engine.invite(p.id, body), true);
+  route("GET", "/v1/assessments/:id/ticket/:att", ({ p }) => engine.ticketFor(p.id, p.att));
+  route("POST", "/v1/assessments/:id/preview", ({ p, body }) => {
+    if (!isObj5(body)) throw err2("bad_request", "the body must be an object, optionally { policy }");
+    return engine.previewRecognition(p.id, { policy: body.policy });
+  });
+  route("POST", "/v1/assessments/:id/invitations/:att/remove", ({ p, body }) => engine.removeInvitation(p.id, p.att, { reason: isObj5(body) ? body.reason : void 0 }), true);
   route("POST", "/v1/assessments/:id/commit", ({ p, body }) => engine.commit(p.id, body));
   route("POST", "/v1/assessments/:id/reveal", ({ p, body }) => engine.reveal(p.id, body));
   route("POST", "/v1/assessments/:id/finalize", ({ p }) => engine.finalize(p.id), true);
@@ -2506,10 +2635,13 @@ export {
   kidForDidKey,
   leafBytes,
   leafHash,
+  levelFromNative,
   makeSigner,
   merkleRoot,
+  nativeOfNonce,
   newNonce,
   nodeHash,
+  nonceWithNative,
   openStore,
   parseJws,
   policyFromTemplate,
