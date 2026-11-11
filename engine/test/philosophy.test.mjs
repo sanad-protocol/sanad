@@ -166,3 +166,27 @@ describe('honest limits are stated', () => {
   });
   it('the integration tutorial marks what is untested', () => { expect(read(join(docsRoot, 'TUTORIAL-plug-sanad-into-any-system.md'))).toMatch(/untested/i); });
 });
+
+describe('claims are not stronger than what is checked (review round)', () => {
+  it('the README and DESIGN say that commit-before-reveal ordering is operator-attested and that did:web and statistics are issuer assertions', () => {
+    for (const f of ['README.md', 'DESIGN.md']) { const t = read(join(root, f)); expect(t, f).toMatch(/operator-attested|attested by the operator/i); expect(t, f).toMatch(/did:web[^.]*operator-asserted|operator-asserted/i); }
+    expect(read(join(root, 'DESIGN.md'))).toMatch(/not recomputable from the log/);
+    expect(read(join(root, 'README.md'))).not.toMatch(/marks cannot be copied/i);
+  });
+  it('no document claims that statistics are recomputable from the log or that any verifier sees tampering', () => {
+    for (const f of all.filter((f) => f.endsWith('.md'))) for (const line of read(f).split('\n')) {
+      if (/statistics[^.]*recomputable from the (hash-only )?log/i.test(line)) expect(line, rel(f)).toMatch(/\b(not|cannot|no)\b/i);
+      expect(line, rel(f)).not.toMatch(/any verifier sees it/i);
+    }
+  });
+  it('the experimental, not cryptographically reviewed notice is in every verification report and in the CLI texts', () => {
+    const { engine } = H.setup(); const r = engine.verifyCredential({}, {});
+    expect(r.notice).toMatch(/Experimental/); expect(r.notice).toMatch(/not been cryptographically reviewed/);
+    expect(read(join(root, 'src/cli.mjs'))).toMatch(/NOTICE/);
+  });
+  it('the decisions that were deliberately not taken are written down', () => {
+    const t = read(join(docsRoot, 'SPEC-DECISIONS-NEEDED.md'));
+    for (const h of ['commit statements', 'attestor signature', 'conflictDeclared', 'statistics', 'Agreement', 'proof format', 'Evidence hash', 'Level 6', 'did:web', 'month']) expect(t, h).toContain(h);
+  });
+});
+

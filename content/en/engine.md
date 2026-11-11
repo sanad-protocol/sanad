@@ -4,7 +4,7 @@ lang: en
 path: /engine/
 nav: engine
 title: The Sanad engine
-description: The Sanad engine runs one assessment end to end and issues credentials that any verifier can recompute. Version 0.2.0.
+description: The Sanad engine runs one assessment end to end and issues credentials that a verifier can check and evaluate under its own policy. Version 0.2.0.
 toc: true
 ---
 
@@ -41,7 +41,7 @@ The engine implements algorithm `sanad-0.1` of [SANAD-SPEC-0.1](/spec/0.1/) and 
 | `engine/` (`@sanad-protocol/engine` 0.2.0) | Plain ES modules; `dist/sanad-engine.mjs` is a single-file bundle of core and engine for vendoring. |
 | Keys | Ed25519 keys, `did:key`, detached JWS, DID document histories with rotation and revocation. |
 | Templates | Template schema and validator; the template hash is pinned. |
-| Commit and reveal | Blind commits, reveals, deadlines, late and missing reveals, independence checks. |
+| Commit and reveal | Blind commits, reveals, deadlines, late and missing reveals; the template minimum is enforced at finalize. |
 | Evidence chain and credential | Sealing, bundle hash, issuer proof, credential verification. |
 | Transparency log | Merkle tree (RFC 9162) with inclusion and consistency proofs and signed checkpoints. |
 | Attestor statistics | Sittings and agreement, derived from finalized assessments. |
@@ -83,7 +83,7 @@ The script runs three example assessments from template to verified credential: 
 | `sanad-engine commit <assessment> <attestationId> --key <file> --level <n>` | Blind commit; the nonce is kept in a local file next to the key. |
 | `sanad-engine reveal <assessment> <attestationId> --key <file>` | Reveal. |
 | `sanad-engine finalize <assessment> [--out]` | Seal and issue the credential. |
-| `sanad-engine verify <credential.json> [--policy <file>]` | Verify a credential. |
+| `sanad-engine verify <credential.json> [--policy <file>] [--issuer <did>] [--log-key <did>] [--as-of <date>]` | Verify a credential. The verifier states its policy and day and pins the issuer and log key; an unpinned issuer or log key fails unless `--allow-unpinned`. |
 | `sanad-engine log checkpoint`, `inclusion`, `consistency` | Read the transparency log. |
 | `sanad-engine serve [--port] [--host]` | Start the HTTP server. |
 
@@ -105,7 +105,7 @@ JSON over `node:http`; the body limit is 256 KiB and `content-type: application/
 | `POST /v1/assessments/:id/reveal` | attestor (signed) | Reveal. |
 | `POST /v1/assessments/:id/finalize` | operator | Seal and issue the credential. |
 | `GET /v1/credentials/:id` | anyone | The credential. |
-| `POST /v1/verify` | anyone | Verification report for a posted credential and optional policy. |
+| `POST /v1/verify` | anyone | Verification report for a posted credential under the caller's own complete policy and pins. |
 | `GET /v1/log/checkpoint`, `/v1/log/entries`, `/v1/log/inclusion`, `/v1/log/consistency` | anyone | The transparency log. |
 | `GET /v1/attestors/:did/stats` | anyone | Derived statistics. |
 | `GET /` | anyone | The demonstration page. |

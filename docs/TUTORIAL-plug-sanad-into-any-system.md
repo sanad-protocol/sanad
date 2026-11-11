@@ -5,8 +5,9 @@ This tutorial shows how a platform (a course site, an exam centre, a guild, a sc
 Five lines to hold on to:
 
 - Sanad is decentralised assessment of skill. It is not accreditation, and nobody vets attestors for the protocol.
-- A credential is a recomputable chain of what was observed. **Each verifier applies its own policy**; the policy inside a template is only a recommendation.
-- Examiners commit to a mark blind and reveal it later, so they cannot copy each other.
+- A credential is a chain of what was observed that a verifier can check and then evaluate. **Each verifier applies its own policy**; the policy inside a template is only a recommendation.
+- The software is **experimental**: it has had no cryptographic review. Every verification report and the CLI say so.
+- Examiners commit to a mark blind and reveal it later, so that no examiner sees another's mark before committing. The ordering is attested by the operator; the credential does not yet carry the signed commits that would let a third party check it (`docs/SPEC-DECISIONS-NEEDED.md`).
 - **Attestors hold their own private keys.** The engine, the server and the library never receive or generate them.
 - No names or personal data enter the engine. The protocol has no central authority, no token and no fee.
 
@@ -45,7 +46,7 @@ The attestor signs in their own client: a browser page (`engine/static/sanad-cli
 4. Each attestor **commits**: a signed hash of attestor, evidence, level and nonce. Nothing about the mark is readable.
 5. When every invited attestor has committed, or the commit deadline has passed, the reveal phase opens. Each attestor **reveals** level and nonce, signed.
 6. At any time after reveals start, anyone may ask for a **preview** of recognition over the marks revealed so far (provisional, never reading an unrevealed mark).
-7. The operator **finalizes** after all reveals or after the reveal deadline. Missing and late reveals are recorded, not hidden.
+7. The operator **finalizes** after all reveals or after the reveal deadline. Missing and late reveals are recorded, not hidden. The engine **enforces the template**: every evidence item that needs human attestors needs at least `attestors.min` revealed attestors, and a live-sitting template needs revealed marks on sitting evidence, otherwise `below_template_minimum`. The operator can finalize anyway with `allowShortfall`, which is written into the credential (`process.shortfall`) and shown to verifiers as a warning.
 8. Anyone **verifies**, with their own policy.
 
 ## 4. A worked example
@@ -80,14 +81,20 @@ A third party verifies (mode 3) with a policy of its own and the issuer and log 
 
 ```js
 const report = verifyCredential(credential, {
-  trustedIssuers: [issuerDid], trustedLogKeys: [logKeyDid],
-  policy: { minAttestors: 3, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8 },
+  trustedIssuers: [issuerDid], trustedLogKeys: [logKeyDid],        // pinned by the verifier; unpinned means ok: false
+  policy: { minAttestors: 3, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8, asOf: '2026-03-02' },
+  // pinnedKeys: { 'did:web:...': ['z6Mk...'] }   for did:web issuers or attestors: pin the KEY, not the name
+  // attestorStats: {...}                          the verifier's own statistics, if the policy has sittings or agreement thresholds
 });
 // report.ok            integrity: shape, issuer proof, bundle hash, signatures, log, pinned issuer
 // report.recognition   what this verifier's policy makes of the chain: status, level, confidence, explanation
 ```
 
-Without a `policy` the template's recommendation is used and the CLI says so. A serious verifier states its own. Verification needs no network and no engine instance. DIDs other than `did:key` resolve from the histories embedded in the credential, or from a resolver the verifier passes in.
+There is **no default policy and no default evaluation day** in the library or the HTTP route: without a policy the report is `ok: false` with `recognition: null`, unless the caller passes `useRecommendedPolicy` (the issuer's recommendation, labelled in `report.basis`). The CLI defaults to the recommendation and prints that it did. Verification needs no network and no engine instance. Three trust rules follow from keys being what is trusted, not DID names:
+
+- **Pin the issuer and the log key.** Unpinned means `ok: false` unless `allowUnpinned`.
+- **A `did:web` identity's key history inside the credential is only the issuer's claim.** The verifier pins the key (`pinnedKeys`) or supplies the history (`trustedDidHistories`); otherwise `ok` is false. `did:web` registration in an engine is operator-asserted: nothing proves control of the domain.
+- **Attestor statistics are the issuer's statement.** They cannot be recomputed from the log. If the policy has a sittings or agreement threshold the verifier supplies its own `attestorStats` or accepts the issuer's with `allowIssuerStatistics` (a warning).
 
 ## 5. The port and adapter pattern
 
@@ -210,7 +217,7 @@ A third provider, whether a different transport or a second implementation of th
 
 | Situation | What happens | What the host does |
 |---|---|---|
-| An examiner never commits | After `commitBy`, reveals open for those who committed; the missing one is `notCommitted` | Remove the invitation before the first commit if known earlier; otherwise finalize with fewer attestors and let verifiers' `minAttestors` decide |
+| An examiner never commits | After `commitBy`, reveals open for those who committed; the missing one is `notCommitted` | Remove the invitation before the first commit if known earlier; if the template minimum is then not met, finalize refuses (`below_template_minimum`): open a new assessment, or finalize with `allowShortfall` knowing that verifiers will see the shortfall |
 | An examiner commits and never reveals | After `revealBy`, finalize records `missing` and a `missing-reveal` log leaf | Nothing; this is visible evidence |
 | A reveal is late | `reveal_late`, recorded as late | A new assessment if needed; no edits |
 | A commit is copied or replayed | `commit_mismatch_invitation`, `already_committed` | Nothing |
@@ -223,8 +230,10 @@ A third provider, whether a different transport or a second implementation of th
 | Attestor key stolen | A thief can sign statements with earlier dates; the log time of the commit is the defence | Revoke in the DID history; verifiers read log times. Not fully solved |
 | The log was rewritten | The consistency proof against a kept checkpoint fails | Treat the log as untrusted; restore from backup; tell verifiers |
 | The provider is down | `provider_unreachable` | Queue and retry; never fabricate or sign locally |
+| The operator's clock steps back | The engine's clock never runs backwards; a commit is refused once any reveal exists | Nothing; fix the clock for future deadlines |
+| Finalize crashes half way | A retry appends no duplicate log leaves and overwrites the same credential id | Call `finalize` again |
 | Crash between the engine call and the host's own record | The engine's record is durable (the file store appends with `fsync`) | Re-read the assessment and repair the host's record |
-| Credential tampered | `verify` lists failed checks; changed attestations are dropped under rule R1 | Nothing; any verifier sees it |
+| Credential tampered | `verify` lists failed checks; changed attestations are dropped under rule R1. A forged credential under the forger's own keys passes every integrity check; only a verifier that **pinned** the issuer and log key (and, for `did:web`, the keys) refuses it | Tell verifiers to pin; nothing else can be done in the document |
 | Template policy disagrees with a verifier | The verifier's policy wins for that verifier | Nothing; this is the design |
 | Collusion, help off camera, impersonation | Not detectable by software | Use the host's own controls and say so |
 
@@ -260,6 +269,8 @@ Tick each box; a "no" is a defect in the integration, not a detail.
 
 **Verification and policy**
 - [ ] The host's pages show the verifier's own policy result, or the template recommendation labelled as a recommendation.
+- [ ] The host's verification pins the issuer and log key, and for `did:web` the keys; it supplies its own attestor statistics if a threshold uses them.
+- [ ] The host says that commit-before-reveal ordering is attested by the operator, and keeps the signed commits and checkpoints so that others can check it.
 - [ ] Third parties can verify without calling the host (the credential is portable; they pin issuer and log key themselves).
 - [ ] Missing and late reveals and removed invitations are visible in what the host shows.
 

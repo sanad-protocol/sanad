@@ -284,3 +284,24 @@ describe('browser helper', () => {
     expect(a.privateKeyExtractable).toBe(false);
   });
 });
+
+describe('more HTTP', () => {
+  it('stats answers zeros for prototype names; an oversized body gets 413 and the connection is closed', async () => {
+    const TOKEN = 'operator-token-0123456789';
+    const ctx = H.setup(); const server = createHttpServer({ engine: ctx.engine, operatorToken: TOKEN });
+    await new Promise((ok) => server.listen(0, '127.0.0.1', ok));
+    const base = 'http://127.0.0.1:' + server.address().port;
+    try {
+      for (const n of ['constructor', '__proto__', 'toString']) expect(await (await fetch(base + '/v1/attestors/' + n + '/stats')).json()).toEqual({ sittings: 0, agreement: 0 });
+      const r = await fetch(base + '/v1/templates', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + TOKEN }, body: JSON.stringify({ pad: 'x'.repeat(400000) }) });
+      expect(r.status).toBe(413); expect(r.headers.get('connection')).toBe('close');
+    } finally { await new Promise((ok) => server.close(ok)); }
+  });
+  it('the small-order key check is cached (same answer, far fewer computations)', async () => {
+    const { isSmallOrderKey } = await import('../src/index.mjs');
+    const id = new Uint8Array(32); id[0] = 1; // the identity point
+    const t0 = performance.now(); for (let i = 0; i < 2000; i++) expect(isSmallOrderKey(id)).toBe(true);
+    expect(performance.now() - t0).toBeLessThan(500);
+  });
+});
+

@@ -28,6 +28,7 @@
 - Invitation removal before the first commit (`process.removed` in the credential when used).
 - HTTP request and response bodies documented in full; port and adapter example and contract suite; three more engine vectors.
 - Public tutorial `docs/TUTORIAL-plug-sanad-into-any-system.md`.
+- Review round: verifier pins keys (embedded `did:web` histories untrusted by default), explicit verifier policy and day, all policy fields validated, verifier statistics and allow-list, duplicate marks dropped, id and role checks, monotonic phases and clock, template minimum enforced at finalize (`allowShortfall` override recorded), idempotent finalize, bounded and I-JSON-checked HTTP input, non-extractable browser key, complete `index.d.ts`, experimental notice in every report, independent Python cross-check, `docs/SPEC-DECISIONS-NEEDED.md`.
 - HTTP API, command-line tool `sanad-engine` and a demonstration page.
 - Three example assessments (mathematics oral examination, software testing portfolio, practical welding test) and a toy host.
 - Six deterministic engine vectors in `engine/vectors/`.

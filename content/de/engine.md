@@ -4,7 +4,7 @@ lang: de
 path: /de/engine/
 nav: engine
 title: Die Sanad-Engine
-description: Die Sanad-Engine führt eine Prüfung von Anfang bis Ende durch und stellt Nachweise aus, die jede prüfende Stelle nachrechnen kann. Version 0.2.0.
+description: Die Sanad-Engine führt eine Prüfung von Anfang bis Ende durch und stellt Nachweise aus, die eine prüfende Stelle prüfen und nach eigener Richtlinie bewerten kann. Version 0.2.0.
 toc: true
 ---
 
