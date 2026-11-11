@@ -33,7 +33,7 @@ describe('signing ticket', () => {
     engine.reveal('as-1', prepareReveal({ signer: P.A.signer, ticket: t, secret: c.secret, date: t.serverDay }));
     engine.reveal('as-1', prepareReveal({ signer: P.B.signer, ticket: engine.ticketFor('as-1', inv[1].attestationId), secret: cb.secret, date: '2026-03-01' }));
     clock.advance(1000);
-    expect(engine.verifyCredential(engine.finalize('as-1')).ok).toBe(true);
+    expect(engine.verifyCredential(engine.finalize('as-1'), { useRecommendedPolicy: true }).ok).toBe(true);
   });
   it('is refused for an unknown or removed invitation, and the browser helper accepts a ticket too', async () => {
     const { engine, inv } = two();
@@ -72,7 +72,7 @@ describe('levelMap', () => {
     clock.advance(1000);
     const doc = engine.finalize('as-1');
     expect(nativeOfNonce(doc.sanad.bundle.attestations[0].nonce)).toBe('g5');
-    expect(engine.verifyCredential(doc).ok).toBe(true);
+    expect(engine.verifyCredential(doc, { useRecommendedPolicy: true }).ok).toBe(true);
   });
   it('a nonce whose native mark disagrees with the revealed level, or is not listed, is refused at the reveal', () => {
     for (const [nonce, level, codeWanted] of [[nonceWithNative('g1', 'q'.repeat(22)), 4, 'native_mismatch'], [nonceWithNative('zz', 'q'.repeat(22)), 4, 'native_unknown']]) {
@@ -160,9 +160,10 @@ describe('invitation removal', () => {
     engine.removeInvitation('as-1', inv[1].attestationId);
     expect(engine.getAssessment('as-1').revealOpen).toBe(true);
     H.revealAs(engine, P.A, 'as-1', a); clock.advance(1000);
-    const doc = engine.finalize('as-1');
-    expect(doc.sanad.process).toMatchObject({ invited: 1, committed: 1, revealed: 1, removed: ['as-1.a02'] });
-    expect(engine.verifyCredential(doc).ok).toBe(true);
+    H.code(() => engine.finalize('as-1'), 'below_template_minimum');
+    const doc = engine.finalize('as-1', { allowShortfall: true });
+    expect(doc.sanad.process).toMatchObject({ invited: 1, committed: 1, revealed: 1, removed: ['as-1.a02'], shortfall: [expect.any(String)] });
+    expect(engine.verifyCredential(doc, { useRecommendedPolicy: true }).ok).toBe(true);
   });
   it('a credential without removals keeps the six-member process (older credentials still verify)', () => {
     const { engine, people: P, inv, clock } = two();

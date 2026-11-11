@@ -48,6 +48,7 @@ export function createToyHost({ template, now = () => Date.now() } = {}) {
 }
 
 /** Verify-only mode (3): a third party with the vendored bundle, the issuer and log keys it has chosen to trust, and its own policy. */
-export function thirdPartyCheck(credential, { issuer, logKey, policy }) {
-  return verifyCredential(credential, { trustedIssuers: [issuer], trustedLogKeys: [logKey], policy });
+export function thirdPartyCheck(credential, { issuer, logKey, policy, asOf }) {
+  // the verifier pins the issuer and log key it trusts and states its own policy and evaluation day
+  return verifyCredential(credential, { trustedIssuers: [issuer], trustedLogKeys: [logKey], policy: policy ?? { minAttestors: 2, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8 }, asOf });
 }

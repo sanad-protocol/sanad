@@ -95,10 +95,10 @@ export function runVector(vector) {
         observed = e ? { error: e } : { revealed: r.revealed, of: r.of }; break;
       }
       case 'finalize': {
-        let doc; const e = errCode(() => { doc = engine.finalize(aid); });
+        let doc; const e = errCode(() => { doc = engine.finalize(aid, { allowShortfall: step.allowShortfall === true }); });
         if (e) { observed = { error: e }; break; }
         ctx.state.sealed = doc;
-        const v = engine.verifyCredential(doc);
+        const v = engine.verifyCredential(doc, { useRecommendedPolicy: true });
         observed = { bundleHash: doc.evidence[0].bundleHash, process: doc.sanad.process, checksPass: v.ok, recognition: compact(v.recognition), attestorStats: doc.sanad.bundle.attestors, logSize: doc.sanad.log.checkpoint.payload.size, logRoot: doc.sanad.log.checkpoint.payload.rootHash }; break;
       }
       case 'verify': {
@@ -108,7 +108,7 @@ export function runVector(vector) {
           const a = doc.sanad.bundle.attestations.find((x) => x.id === step.flipSignatureOf);
           const sig = a.signature; a.signature = sig.slice(0, -10) + (sig.at(-10) === 'A' ? 'B' : 'A') + sig.slice(-9);
         }
-        const v = engine.verifyCredential(doc, step.policy ? { policy: step.policy } : {});
+        const v = engine.verifyCredential(doc, step.policy ? { policy: { ...step.policy, asOf: doc.validFrom.slice(0, 10) } } : { useRecommendedPolicy: true });
         observed = { ok: v.ok, failed: v.checks.filter((c) => !c.ok).map((c) => c.name), recognition: compact(v.recognition), dropped: (v.recognition?.dropped ?? []).map((d) => d.id + ':' + d.rule) }; break;
       }
       default: throw new Error('unknown op ' + step.op);

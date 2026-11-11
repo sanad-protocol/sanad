@@ -1,6 +1,6 @@
 {
   "id": "engine-late-reveal",
-  "description": "B commits but reveals after revealBy: refused as late and recorded; the credential holds A only and the verifier under minAttestors 2 gets a provisional result.",
+  "description": "B commits but reveals after revealBy: refused as late and recorded; finalize is refused below the template minimum (one attestor of two) until the operator passes allowShortfall, which is recorded as process.shortfall; the verifier under minAttestors 2 gets a provisional result.",
   "setup": {
     "clock": "2026-03-01T09:00:00.000Z",
     "template": {
@@ -162,6 +162,13 @@
     {
       "op": "finalize",
       "expect": {
+        "error": "below_template_minimum"
+      }
+    },
+    {
+      "op": "finalize",
+      "allowShortfall": true,
+      "expect": {
         "bundleHash": "5140fb4ccc6be7fb01bd05a7c237ce430d4f8e7030da992376a13e24b11a033a",
         "process": {
           "invited": 2,
@@ -173,7 +180,10 @@
           "late": [
             "as-1.a02"
           ],
-          "notCommitted": []
+          "notCommitted": [],
+          "shortfall": [
+            "as-1.E1: 1 revealed attestor(s), template minimum 2"
+          ]
         },
         "checksPass": true,
         "recognition": {

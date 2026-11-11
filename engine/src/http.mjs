@@ -7,6 +7,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EngineError } from './errors.mjs';
+import { scanJsonText, checkIJson } from './ijson.mjs';
+import { VERIFY_LIMITS } from './bundle.mjs';
 
 export const BODY_LIMIT = 256 * 1024;
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -15,6 +17,7 @@ const FILES = { '/': ['index.html', 'text/html; charset=utf-8'], '/app.js': ['ap
 export const CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 const SECURITY = { 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer', 'cache-control': 'no-store' };
 const MAX_ENTRIES = 1000;
+const DRAIN_LIMIT = 1024 * 1024;
 
 const err = (code, message, status = 400) => new EngineError(code, message, status);
 const sha = (s) => createHash('sha256').update(s).digest();
@@ -26,14 +29,20 @@ function readBody(req) {
     if (ct !== 'application/json') return reject(err('unsupported_media_type', 'content-type must be application/json', 415));
     const chunks = []; let n = 0; let dead = false;
     req.on('data', (c) => {
-      if (dead) return;
       n += c.length;
+      if (dead) { if (n > BODY_LIMIT + DRAIN_LIMIT) req.destroy(); return; } // after a refusal, read a little more, then drop the connection
       if (n > BODY_LIMIT) { dead = true; reject(err('body_too_large', 'the body is larger than ' + BODY_LIMIT + ' bytes', 413)); return; }
       chunks.push(c);
     });
     req.on('end', () => {
       if (dead) return;
-      try { const v = JSON.parse(Buffer.concat(chunks).toString('utf8')); resolve(v); } catch { reject(err('bad_json', 'the body is not valid JSON')); }
+      let text;
+      try { text = new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)); } catch { return reject(err('bad_json', 'the body is not valid UTF-8')); }
+      try { scanJsonText(text); } catch (e) { return reject(e); }
+      let v;
+      try { v = JSON.parse(text); } catch { return reject(err('bad_json', 'the body is not valid JSON')); }
+      try { checkIJson(v); } catch (e) { return reject(e); }
+      resolve(v);
     });
     req.on('error', () => { if (!dead) { dead = true; reject(err('bad_request', 'the request could not be read')); } });
   });
@@ -50,7 +59,7 @@ const intParam = (q, name, def) => {
  * @param {{ engine: object, operatorToken: string, staticDir?: string|null, serveStatic?: boolean }} opts
  * @returns {import('node:http').Server}
  */
-export function createHttpServer({ engine, operatorToken, serveStatic = true } = {}) {
+export function createHttpServer({ engine, operatorToken, serveStatic = true, onError = (m) => process.stderr.write(m + '\n') } = {}) {
   if (!engine) throw err('bad_config', 'an engine is required');
   if (typeof operatorToken !== 'string' || operatorToken.length < 16) throw err('bad_config', 'operatorToken must be a string of at least 16 characters');
   const tokenHash = sha(operatorToken);
@@ -89,19 +98,29 @@ export function createHttpServer({ engine, operatorToken, serveStatic = true } =
   route('POST', '/v1/assessments/:id/invitations/:att/remove', ({ p, body }) => engine.removeInvitation(p.id, p.att, { reason: isObj(body) ? body.reason : undefined }), true);
   route('POST', '/v1/assessments/:id/commit', ({ p, body }) => engine.commit(p.id, body));
   route('POST', '/v1/assessments/:id/reveal', ({ p, body }) => engine.reveal(p.id, body));
-  route('POST', '/v1/assessments/:id/finalize', ({ p }) => engine.finalize(p.id), true);
+  route('POST', '/v1/assessments/:id/finalize', ({ p, body }) => engine.finalize(p.id, { allowShortfall: isObj(body) && body.allowShortfall === true }), true);
   route('GET', '/v1/credentials/:id', ({ p }) => engine.getCredential(p.id));
   route('POST', '/v1/verify', ({ body }) => {
-    if (!isObj(body) || !('credential' in body)) throw err('bad_request', 'the body must be { credential, policy?, trustedIssuers?, trustedLogKeys?, asOf? }');
+    if (!isObj(body) || !('credential' in body)) throw err('bad_request', 'the body must be { credential, policy | useRecommendedPolicy, asOf?, trustedIssuers?, trustedLogKeys?, ... } (DESIGN section 8)');
+    const c = body.credential, b = c?.sanad?.bundle, l = c?.sanad?.log;
+    if ((Array.isArray(b?.attestations) && b.attestations.length > VERIFY_LIMITS.attestations) || (Array.isArray(b?.evidence) && b.evidence.length > VERIFY_LIMITS.evidence)
+      || (Array.isArray(l?.entries) && l.entries.length > VERIFY_LIMITS.logEntries) || (Array.isArray(c?.sanad?.dids) && c.sanad.dids.length > VERIFY_LIMITS.dids)) throw err('too_large', 'the credential has more attestations, evidence items, log entries or DID histories than one verification call accepts');
     const opts = {};
     if (body.policy !== undefined) { if (!isObj(body.policy)) throw err('bad_request', 'policy must be an object'); opts.policy = body.policy; }
-    for (const k of ['trustedIssuers', 'trustedLogKeys']) {
+    for (const k of ['trustedIssuers', 'trustedLogKeys', 'trustedLogIds', 'allowedAttestors']) {
       if (body[k] === undefined) continue;
       if (!Array.isArray(body[k]) || !body[k].every((x) => typeof x === 'string')) throw err('bad_request', k + ' must be a list of strings');
       opts[k] = body[k];
     }
+    for (const k of ['useRecommendedPolicy', 'useVerifierClock', 'allowUnpinned', 'allowIssuerStatistics', 'allowEmbeddedDids']) {
+      if (body[k] === undefined) continue;
+      if (typeof body[k] !== 'boolean') throw err('bad_request', k + ' must be true or false');
+      opts[k] = body[k];
+    }
+    for (const k of ['pinnedKeys', 'attestorStats']) { if (body[k] === undefined) continue; if (!isObj(body[k])) throw err('bad_request', k + ' must be an object'); opts[k] = body[k]; }
+    if (body.trustedDidHistories !== undefined) { if (!Array.isArray(body.trustedDidHistories)) throw err('bad_request', 'trustedDidHistories must be a list'); opts.trustedDidHistories = body.trustedDidHistories; }
     if (body.asOf !== undefined) { if (typeof body.asOf !== 'string') throw err('bad_request', 'asOf must be a string'); opts.asOf = body.asOf; }
-    return engine.verifyCredential(body.credential, opts);
+    return engine.verifyCredential(c, opts);
   });
   route('GET', '/v1/log/checkpoint', () => engine.log.checkpoint());
   route('GET', '/v1/log/entries', ({ q }) => {
@@ -171,8 +190,9 @@ export function createHttpServer({ engine, operatorToken, serveStatic = true } =
       const status = known ? e.status : 500;
       const payload = known ? { error: e.code, message: e.message } : { error: 'internal', message: 'internal error' };
       if (known && e.reason) payload.reason = e.reason;
-      if (!known) process.emitWarning?.('sanad-engine internal error: ' + (e?.stack ?? e));
-      if (!res.headersSent) send(res, status, payload, { 'content-type': 'application/json; charset=utf-8' });
+      if (!known) { try { onError('sanad-engine internal error: ' + (e?.name ?? 'Error') + ': ' + String(e?.message ?? e).slice(0, 200)); } catch { /* logging must not fail the request */ } }
+      if (status === 413) res.once('finish', () => req.destroy());
+      if (!res.headersSent) send(res, status, payload, { 'content-type': 'application/json; charset=utf-8', ...(status === 413 ? { connection: 'close' } : {}) });
       else res.end();
     }
   });

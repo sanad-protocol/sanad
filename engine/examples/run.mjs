@@ -61,9 +61,9 @@ export function runExample(name, log = () => {}) {
   now += 26 * HOUR;
   people.forEach((p, i) => engine.reveal(a.id, prepareReveal({ signer: p.who.signer, assessment: engine.getAssessment(a.id), attestationId: invs[i].attestationId, secret: secrets[i], date: '2026-03-03' })));
   const credential = engine.finalize(a.id);
-  const report = engine.verifyCredential(credential);
+  const report = engine.verifyCredential(credential, { useRecommendedPolicy: true });
   // two verifiers, two policies, one chain
-  const strict = engine.verifyCredential(credential, { policy: { minAttestors: 5, requireLive: true, halfLifeMonths: 12, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8 } });
+  const strict = engine.verifyCredential(credential, { policy: { minAttestors: 5, requireLive: true, halfLifeMonths: 12, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8, asOf: '2026-03-03' } });
   return { engine, template, credential, report, strictReport: strict };
 }
 

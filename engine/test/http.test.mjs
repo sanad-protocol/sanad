@@ -84,12 +84,14 @@ describe('HTTP API: a whole assessment, attestors sign on their side', () => {
     expect((await op('POST', '/v1/assessments/as-http/finalize', {})).status).toBe(200);
     const aview = await view();
     const cred = (await req('GET', '/v1/credentials/' + encodeURIComponent(aview.credentialId))).json;
-    const v = (await req('POST', '/v1/verify', { credential: cred })).json;
+    expect((await req('POST', '/v1/verify', { credential: cred })).json.ok).toBe(false); // no policy given: refused
+    const v = (await req('POST', '/v1/verify', { credential: cred, useRecommendedPolicy: true })).json;
     expect(v.ok).toBe(true); expect(v.recognition.level).toBe(3);
     // the same chain under a verifier's own, stricter policy
-    const strict = (await req('POST', '/v1/verify', { credential: cred, policy: { minAttestors: 4, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8 } })).json;
+    const strict = (await req('POST', '/v1/verify', { credential: cred, policy: { minAttestors: 4, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8, asOf: '2026-03-02' } })).json;
     expect(strict.recognition.status).toBe('provisional');
     expect((await req('POST', '/v1/verify', { credential: cred, policy: 5 })).status).toBe(400);
+    expect((await req('POST', '/v1/verify', { credential: cred, policy: { halfLifeMonths: 24 } })).json.checks.find((c) => c.name === 'policy').ok).toBe(false);
     const cp = (await req('GET', '/v1/log/checkpoint')).json;
     expect(cp.payload.size).toBeGreaterThan(4);
     const inc = (await req('GET', '/v1/log/inclusion?index=0')).json; expect(inc.size).toBe(cp.payload.size);

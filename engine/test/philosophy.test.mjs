@@ -58,8 +58,8 @@ describe('decentralised assessment, never accreditation', () => {
     sec.forEach((s, k) => H.revealAs(engine, P['AB'[k]], 'as-1', s));
     clock.advance(1000);
     const doc = engine.finalize('as-1');
-    const own = engine.verifyCredential(doc).recognition;
-    const strict = engine.verifyCredential(doc, { policy: { minAttestors: 3, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8 } }).recognition;
+    const own = engine.verifyCredential(doc, { useRecommendedPolicy: true }).recognition;
+    const strict = engine.verifyCredential(doc, { policy: { minAttestors: 3, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8, asOf: '2026-03-01' } }).recognition;
     expect(own.status).toBe('recognised'); expect(strict.status).toBe('provisional');
     expect(doc.sanad.policy.id).toBe('p1'); // carried as data
     expect(Object.keys(doc.sanad.policy)).toContain('minAttestors');

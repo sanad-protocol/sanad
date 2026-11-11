@@ -10,6 +10,7 @@ import { generateKeyPair, makeSigner, exportPrivateKey, importPrivateKey } from 
 import { prepareCommit, prepareReveal } from './attestor.mjs';
 import { createHttpServer } from './http.mjs';
 import { EngineError } from './errors.mjs';
+import { NOTICE, verifyCredential } from './bundle.mjs';
 
 const USAGE = `sanad-engine <command>
 
@@ -23,8 +24,10 @@ const USAGE = `sanad-engine <command>
   uninvite <assessment> <attestationId> [--reason <text>]   withdraw an invitation before that attestor's first commit
   preview <assessment> [--policy <file>]      provisional recognition over revealed attestations only
   ticket <assessment> <attestationId>         the signing ticket for an attestor's client
-  finalize <assessment> [--out <file>]
-  verify <credential.json> [--policy <file>] [--issuer <did>] [--log-key <did>]
+  finalize <assessment> [--out <file>] [--allow-shortfall]   (the template minimum is enforced; the override is recorded in the credential)
+  verify <credential.json> [--policy <file>] [--as-of <YYYY-MM-DD>] [--issuer <did>] [--log-key <did>] [--log-id <id>]
+         [--pin-key <did>=<multibase>] [--dids <histories.json>] [--stats <file>] [--template <file>] [--allow-unpinned] [--allow-issuer-statistics]
+         Without --policy the CLI takes the template's recommendation and the credential's date, and says so. Unpinned issuer or log key fails unless --allow-unpinned.
   log checkpoint | log inclusion --index <i> [--size <n>] | log consistency --m <m> [--n <n>]
   serve [--port <n>] [--host <addr>]          start the HTTP API and demonstration page (default 127.0.0.1:8787)
 
@@ -34,7 +37,7 @@ class Usage extends Error {}
 
 function parse(args) {
   const pos = [], opt = {};
-  const bool = new Set(['conflict', 'help']);
+  const bool = new Set(['conflict', 'help', 'allow-shortfall', 'allow-unpinned', 'allow-issuer-statistics']);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a.startsWith('--')) {
@@ -118,17 +121,26 @@ export async function main(argv, io = {}) {
       const doc = readJson(f);
       const o = {};
       if (opt.policy) o.policy = readJson(opt.policy);
-      // verify-only mode: no data directory is needed; pin the issuer and the log key you trust with --issuer and --log-key
-      const { verifyCredential } = await import('./bundle.mjs');
+      else { o.useRecommendedPolicy = true; out('NOTE  no --policy given: using the template\'s recommended policy and the credential\'s date as the evaluation day. That is the issuer\'s recommendation, not a verifier policy.'); }
+      if (opt['as-of']) o.asOf = opt['as-of'];
+      // verify-only mode: no data directory is needed; the verifier pins the issuer and log key (DIDs) and, for did:web identities, the keys
       if (opt.issuer) o.trustedIssuers = [opt.issuer];
       if (opt['log-key']) o.trustedLogKeys = [opt['log-key']];
+      if (opt['log-id']) o.trustedLogIds = [opt['log-id']];
+      if (opt['pin-key']) { o.pinnedKeys = {}; for (const kv of opt['pin-key'].split(',')) { const i = kv.lastIndexOf('='); if (i < 1) throw new Usage('--pin-key must be <did>=<multibase>'); (o.pinnedKeys[kv.slice(0, i)] ??= []).push(kv.slice(i + 1)); } }
+      if (opt.dids) o.trustedDidHistories = readJson(opt.dids);
+      if (opt.stats) o.attestorStats = readJson(opt.stats);
+      if (opt.template) o.template = readJson(opt.template);
+      if (opt['allow-unpinned']) o.allowUnpinned = true;
+      if (opt['allow-issuer-statistics']) o.allowIssuerStatistics = true;
       const r = verifyCredential(doc, o);
       for (const c of r.checks) out((c.ok ? 'PASS  ' : 'FAIL  ') + c.name + '  ' + c.detail);
       for (const w of r.warnings) out('WARN  ' + w);
       if (r.recognition) {
-        out(`recognition under ${opt.policy ? 'your policy' : 'the template\'s recommended policy (a recommendation only)'}: status ${r.recognition.status}, level ${r.recognition.level}, confidence ${r.recognition.confidence}`);
+        out(`recognition (${r.basis.policySource === 'verifier' ? 'your policy' : 'the issuer\'s recommendation, not a verifier policy'}; evaluation day ${r.recognition.policy.asOf}): status ${r.recognition.status}, level ${r.recognition.level}, confidence ${r.recognition.confidence}`);
         for (const s of r.recognition.explanation) out('  ' + s.rule + '  ' + s.summary);
       }
+      out('NOTICE  ' + NOTICE);
       return r.ok ? 0 : 1;
     }
 
@@ -197,8 +209,10 @@ export async function main(argv, io = {}) {
       if (cmd === 'ticket') { if (!rest[0] || !rest[1]) throw new Usage('ticket needs <assessment> <attestationId>'); json(engine.ticketFor(rest[0], rest[1])); return 0; }
       if (cmd === 'finalize') {
         const aid = rest[0]; if (!aid) throw new Usage('finalize needs an assessment id');
-        const doc = engine.finalize(aid);
+        const doc = engine.finalize(aid, { allowShortfall: opt['allow-shortfall'] === true });
         if (opt.out) { writeFileSync(opt.out, JSON.stringify(doc, null, 2) + '\n'); out('credential ' + doc.id + ' written to ' + opt.out); } else json(doc);
+        if (doc.sanad.process.shortfall) errOut('WARN  finalized below the template minimum (recorded in the credential): ' + doc.sanad.process.shortfall.join('; '));
+        errOut('NOTICE  ' + NOTICE);
         return 0;
       }
       if (cmd === 'log') {

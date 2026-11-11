@@ -247,7 +247,8 @@
         "failed": [
           "issuer-proof",
           "bundle-hash",
-          "evidence-consistency"
+          "evidence-consistency",
+          "template"
         ],
         "recognition": {
           "status": "provisional",

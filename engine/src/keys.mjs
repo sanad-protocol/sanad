@@ -68,9 +68,19 @@ const P25519 = 2n ** 255n - 19n;
 const D25519 = ((P25519 - 121665n * modPow(121666n, P25519 - 2n, P25519) % P25519) % P25519 + P25519) % P25519;
 function modPow(b, e, m) { let r = 1n; b %= m; while (e > 0n) { if (e & 1n) r = r * b % m; b = b * b % m; e >>= 1n; } return r; }
 const inv = (a) => modPow(((a % P25519) + P25519) % P25519, P25519 - 2n, P25519);
-/** True when the 32 bytes are not an Ed25519 point or are a point of order 1, 2, 4 or 8. */
+const SMALL_CACHE = new Map(); // hex -> boolean; bounded, so a flood of distinct keys cannot grow memory
+/** True when the 32 bytes are not an Ed25519 point or are a point of order 1, 2, 4 or 8. Results are cached (the check is BigInt arithmetic). */
 export function isSmallOrderKey(raw32) {
   if (!(raw32 instanceof Uint8Array) || raw32.length !== 32) return true;
+  const k = Buffer.from(raw32).toString('hex');
+  const hit = SMALL_CACHE.get(k);
+  if (hit !== undefined) return hit;
+  const v = computeSmallOrder(raw32);
+  if (SMALL_CACHE.size >= 1024) SMALL_CACHE.delete(SMALL_CACHE.keys().next().value);
+  SMALL_CACHE.set(k, v);
+  return v;
+}
+function computeSmallOrder(raw32) {
   let y = 0n; for (let i = 31; i >= 0; i--) y = (y << 8n) | BigInt(raw32[i]);
   y &= (1n << 255n) - 1n; y %= P25519;
   const y2 = y * y % P25519;

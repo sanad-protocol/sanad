@@ -50,10 +50,10 @@ function contract(name, make) {
       clock.advance(1000);
       const doc = await port.finalize(aid);
       expect(doc.type).toEqual(['VerifiableCredential', 'SanadCredential']); expect(doc.sanad.process.removed).toEqual([aid + '.a03']);
-      const report = await port.verify(doc);
+      const report = await port.verify(doc, { useRecommendedPolicy: true });
       expect(report.ok).toBe(true); expect(report.recognition.level).toBe(3);
       // the same credential verifies with no provider at all (verify-only mode)
-      expect(verifyCredential(doc, { trustedIssuers: [ctx.issuer.did], trustedLogKeys: [ctx.logSigner.did] }).ok).toBe(true);
+      expect(verifyCredential(doc, { trustedIssuers: [ctx.issuer.did], trustedLogKeys: [ctx.logSigner.did], useRecommendedPolicy: true }).ok).toBe(true);
       expect((await port.getAssessment(aid)).state).toBe('finalized');
       expect((await port.checkpoint()).payload.size).toBeGreaterThan(4);
       await rejects(port.invite('nope', { attestor: P.A.did, role: 'examiner', evidence: 'E1' }), 'assessment_unknown');

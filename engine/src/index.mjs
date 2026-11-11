@@ -13,3 +13,4 @@ export * from './engine.mjs';
 // Demonstration helper, reachable only by name; no default path of the engine uses it.
 export * as demo from './demo-keys.mjs';
 export * from './http.mjs';
+export * from './ijson.mjs';

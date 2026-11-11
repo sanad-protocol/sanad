@@ -20,10 +20,10 @@ const failed = (r) => r.checks.filter((c) => !c.ok).map((c) => c.name);
 describe('end to end: honest A, tampered B, silent C', () => {
   it('the untampered credential verifies with every check true', () => {
     const { engine, doc, issuer, logSigner } = run();
-    const r = engine.verifyCredential(doc);
-    expect(r.checks.map((c) => c.name)).toEqual(['shape', 'issuer-proof', 'bundle-hash', 'evidence-consistency', 'attestor-signatures', 'log', 'trusted-issuer']);
+    const r = engine.verifyCredential(doc, { useRecommendedPolicy: true });
+    expect(r.checks.map((c) => c.name)).toEqual(['shape', 'issuer-proof', 'bundle-hash', 'evidence-consistency', 'ids', 'attestor-signatures', 'log', 'trusted-issuer', 'trusted-log-key', 'template', 'policy']);
     expect(r.checks.every((c) => c.ok)).toBe(true);
-    expect(r.ok).toBe(true); expect(r.warnings).toEqual([]);
+    expect(r.ok).toBe(true); expect(r.warnings).toEqual([]); expect(r.notice).toMatch(/Experimental/);
     expect(doc.issuer).toBe(issuer.did); expect(doc.sanad.log.logKey).toBe(logSigner.did);
   });
   it('process lists C as missing and the log holds a missing-reveal leaf for C\'s commit', () => {
@@ -43,14 +43,14 @@ describe('end to end: honest A, tampered B, silent C', () => {
   });
   it('untampered recognition: A=4, B=3 -> lower median 3, recognised (2 attestors, live sitting), confidence 0.838', () => {
     const { engine, doc } = run();
-    const r = engine.verifyCredential(doc).recognition;
+    const r = engine.verifyCredential(doc, { useRecommendedPolicy: true }).recognition;
     expect(r.status).toBe('recognised'); expect(r.level).toBe(3); expect(r.dropped).toEqual([]);
     expect(r.confidence).toBeCloseTo(0.838, 3);
   });
   it('B tampered to level 5 is dropped under R1 (hash and signature); A alone is below minAttestors, so the result is provisional at level 0', () => {
     const { engine, doc } = run();
     const bad = tamper(doc, [{ attestation: 'as-1.a02', set: { level: 5 } }]);
-    const r = engine.verifyCredential(bad);
+    const r = engine.verifyCredential(bad, { useRecommendedPolicy: true });
     expect(r.ok).toBe(false);
     expect(failed(r)).toEqual(['issuer-proof', 'bundle-hash', 'attestor-signatures']);
     expect(r.recognition.dropped).toHaveLength(1);
@@ -64,7 +64,7 @@ describe('end to end: honest A, tampered B, silent C', () => {
     const sig = doc.sanad.bundle.attestations[1].signature;
     const flipped = sig.slice(0, -10) + (sig.at(-10) === 'A' ? 'B' : 'A') + sig.slice(-9);
     const bad = tamper(doc, [{ attestation: 'as-1.a02', set: { signature: flipped } }]);
-    const r = engine.verifyCredential(bad);
+    const r = engine.verifyCredential(bad, { useRecommendedPolicy: true });
     expect(failed(r)).toContain('attestor-signatures');
     expect(r.recognition.dropped.map((d) => d.id)).toEqual(['as-1.a02']);
     expect(r.recognition.dropped[0].reason).toMatch(/signature/);
@@ -72,19 +72,19 @@ describe('end to end: honest A, tampered B, silent C', () => {
   it('an evidence kind change fails evidence-consistency and the bundle hash', () => {
     const { engine, doc } = run();
     const bad = tamper(doc, [{ evidence: 'as-1.E1', set: { kind: 'peer' } }]);
-    const r = engine.verifyCredential(bad);
+    const r = engine.verifyCredential(bad, { useRecommendedPolicy: true });
     expect(failed(r)).toEqual(expect.arrayContaining(['bundle-hash', 'evidence-consistency']));
   });
   it('the log checkpoint and leaves cannot be swapped for another log key', () => {
     const { engine, doc } = run();
-    const r = engine.verifyCredential(doc, { trustedLogKeys: ['did:key:zOther'] });
-    expect(failed(r)).toEqual(['log']);
+    const r = engine.verifyCredential(doc, { useRecommendedPolicy: true, trustedLogKeys: ['did:key:zOther'] });
+    expect(failed(r)).toEqual(expect.arrayContaining(['trusted-log-key']));
   });
   it('a different issuer is refused when pinned, and warned about when not', () => {
     const { engine, doc } = run();
-    expect(failed(engine.verifyCredential(doc, { trustedIssuers: ['did:key:zOther'] }))).toEqual(['trusted-issuer']);
-    const r = engine.verifyCredential(doc, { trustedIssuers: undefined, trustedLogKeys: undefined });
-    expect(r.ok).toBe(true);
+    expect(failed(engine.verifyCredential(doc, { useRecommendedPolicy: true, trustedIssuers: ['did:key:zOther'] }))).toEqual(['trusted-issuer']);
+    const r = engine.verifyCredential(doc, { useRecommendedPolicy: true, trustedIssuers: undefined, trustedLogKeys: undefined });
+    expect(r.ok).toBe(true); // the engine pins its own issuer and log key by default
   });
   it('log inclusion proofs recompute from the leaves', () => {
     const { doc } = run();
@@ -99,11 +99,11 @@ describe('property: random levels', () => {
     for (let n = 0; n < 30; n++) {
       const lv = { A: Math.floor(rnd() * 6), B: Math.floor(rnd() * 6) };
       const { engine, doc } = run(lv);
-      const r = engine.verifyCredential(doc);
+      const r = engine.verifyCredential(doc, { useRecommendedPolicy: true });
       expect(r.ok).toBe(true); expect(r.recognition.dropped).toEqual([]);
       for (const a of doc.sanad.bundle.attestations) {
         const bad = tamper(doc, [{ attestation: a.id, set: { level: (a.level + 1) % 6 } }]);
-        const rr = engine.verifyCredential(bad);
+        const rr = engine.verifyCredential(bad, { useRecommendedPolicy: true });
         expect(rr.ok).toBe(false);
         expect(rr.recognition.dropped.some((d) => d.id === a.id && d.rule === 'R1')).toBe(true);
       }

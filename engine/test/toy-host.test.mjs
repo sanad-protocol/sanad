@@ -18,11 +18,11 @@ describe('toy host (the worked example of the integration tutorial), using the v
     const doc = host.sit({ hostId: 's-17', claimedGrade: 5, examiners: [{ grade: 5 }, { grade: 4 }], date: '2026-03-01' });
     host.sit({ hostId: 's-17', claimedGrade: 3, examiners: [{ grade: 3 }, { grade: 3 }], date: '2026-03-01' });
     expect(host.checkpoints).toHaveLength(2);
-    const ok = thirdPartyCheck(doc, { issuer: host.pinned.issuer, logKey: host.pinned.logKey });
+    const ok = thirdPartyCheck(doc, { issuer: host.pinned.issuer, logKey: host.pinned.logKey, asOf: '2026-03-02' });
     expect(ok.ok).toBe(true); expect(ok.recognition.level).toBe(3);
-    const strict = thirdPartyCheck(doc, { issuer: host.pinned.issuer, logKey: host.pinned.logKey, policy: { minAttestors: 3, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8 } });
+    const strict = thirdPartyCheck(doc, { issuer: host.pinned.issuer, logKey: host.pinned.logKey, policy: { minAttestors: 3, requireLive: true, halfLifeMonths: 24, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.8, asOf: '2026-03-02' } });
     expect(strict.recognition.status).toBe('provisional');
-    expect(thirdPartyCheck(doc, { issuer: 'did:key:zSomeoneElse', logKey: host.pinned.logKey }).ok).toBe(false);
+    expect(thirdPartyCheck(doc, { issuer: 'did:key:zSomeoneElse', logKey: host.pinned.logKey, asOf: '2026-03-02' }).ok).toBe(false);
     // personal data stays in the host: the credential and the engine's store hold the pseudonym only
     expect(JSON.stringify(doc)).not.toContain('Ada'); expect(JSON.stringify(doc)).not.toContain('s-17');
   });

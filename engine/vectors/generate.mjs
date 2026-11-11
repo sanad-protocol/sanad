@@ -43,13 +43,14 @@ const vectors = [
     { op: 'verify', flipSignatureOf: 'as-1.a02' },
     { op: 'verify', tamper: [{ evidence: 'as-1.E1', set: { kind: 'peer' } }] },
   ] },
-  { id: 'engine-late-reveal', description: 'B commits but reveals after revealBy: refused as late and recorded; the credential holds A only and the verifier under minAttestors 2 gets a provisional result.', setup: setup({ A: P.A, B: P.B }), steps: [
+  { id: 'engine-late-reveal', description: 'B commits but reveals after revealBy: refused as late and recorded; finalize is refused below the template minimum (one attestor of two) until the operator passes allowShortfall, which is recorded as process.shortfall; the verifier under minAttestors 2 gets a provisional result.', setup: setup({ A: P.A, B: P.B }), steps: [
     inv('A'), inv('B'),
     { op: 'commit', who: 'A', att: 'as-1.a01', level: 4, nonce: N('a') }, { op: 'commit', who: 'B', att: 'as-1.a02', level: 3, nonce: N('b') },
     { op: 'reveal', who: 'A', att: 'as-1.a01', date: '2026-03-01' },
     { op: 'advance', hours: 80 },
     { op: 'reveal', who: 'B', att: 'as-1.a02', date: '2026-03-04' },
     { op: 'finalize' },
+    { op: 'finalize', allowShortfall: true },
     { op: 'verify' },
   ] },
   { id: 'engine-missing-reveal', description: 'C commits and never reveals: C is listed as missing and a missing-reveal leaf is logged; finalize is refused before the deadline and allowed after it.', setup: setup({ A: P.A, B: P.B, C: P.C }), steps: [
@@ -121,6 +122,15 @@ const vectors = [
     { op: 'reveal', who: 'B', att: 'as-1.a02', date: '2026-03-01' },
     { op: 'finalize' },
     { op: 'verify' },
+  ] },
+  { id: 'engine-clock-regression', description: 'A reveals after the commit deadline; the operator clock then steps back two hours. B still cannot commit: once any reveal exists the commit phase is over, and the engine clock never runs backwards.', setup: setup({ A: P.A, B: P.B }), steps: [
+    inv('A'), inv('B'),
+    { op: 'commit', who: 'A', att: 'as-1.a01', level: 5, nonce: N('a') },
+    { op: 'advance', hours: 25 },
+    { op: 'reveal', who: 'A', att: 'as-1.a01', date: '2026-03-02' },
+    { op: 'advance', hours: -2 },
+    { op: 'commit', who: 'B', att: 'as-1.a02', level: 5, nonce: N('b') },
+    { op: 'info' },
   ] },
 ];
 

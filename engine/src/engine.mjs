@@ -1,17 +1,24 @@
 // The engine: ties templates, assessments, the transparency log, sealing and verification together (DESIGN.md sections 4 and 12).
 // Attestor private keys are never received, stored or generated here; only signed statements arrive.
-import { randomBytes } from 'node:crypto';
-import { hashOf, sealEvidence, recognise, canonical } from './core.mjs';
+import { randomBytes, createHash } from 'node:crypto';
+import { hashOf, sealEvidence, recognise } from './core.mjs';
+import { checkIJson } from './ijson.mjs';
 import { EngineError } from './errors.mjs';
 import { createResolver, isIsoDate } from './keys.mjs';
-import { assertTemplate, templateHash, policyFromTemplate, nativeOfNonce } from './template.mjs';
+import { assertTemplate, templateHash, policyFromTemplate, nativeOfNonce, validatePolicy } from './template.mjs';
 import { checkCommit, checkReveal, NONCE_RE } from './commit.mjs';
 import { attestorStats } from './stats.mjs';
 import { createLog } from './log.mjs';
 import { sealBundle, bundleHashOf as hashBundle, buildCredential, verifyCredential as verifyDoc, ATTESTATION_TYP } from './bundle.mjs';
 
 const ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
-const SUBJECT_RE = /^urn:[a-z0-9][a-z0-9-]{0,31}:[^\s]{1,160}$/i;
+const SUBJECT_RE = /^urn:([a-z0-9][a-z0-9-]{0,31}):([^\s]{1,160})$/i;
+// A guard rail, not a guarantee: namespaces that are plainly personal are refused, but a URN can still be chosen badly.
+const PERSONAL_NS = new Set(['email', 'mailto', 'mail', 'person', 'name', 'tel', 'phone', 'msisdn']);
+const subjectOk = (s) => { const m = typeof s === 'string' ? SUBJECT_RE.exec(s) : null; return !!m && !PERSONAL_NS.has(m[1].toLowerCase()) && !m[2].includes('@'); };
+const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+// a credential id derived from the assessment and the bundle hash, so that a retried finalize overwrites instead of duplicating
+const uuidFrom = (text) => { const h = createHash('sha256').update(text).digest('hex'); return `urn:uuid:${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`; };
 const DID_KEY = 'did:key:';
 const COMMIT_TYP = 'sanad-commit+jws';
 const HOUR = 3600000;
@@ -25,17 +32,20 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
   if (!logSigner || !logSigner.did || typeof logSigner.sign !== 'function') throw err('bad_config', 'logSigner must be { did, kid, sign }');
   const res = resolver ?? createResolver({ store });
   const log = createLog({ store, logId, signer: logSigner, clock });
-  const nowMs = () => clock.now();
+  // the engine's clock never runs backwards: a deadline that has passed stays passed (also across restarts, through each assessment's high-water mark)
+  let hi = 0;
+  const nowMs = () => { const t = clock.now(); if (Number.isFinite(t) && t > hi) hi = t; return hi; };
   const nowIso = () => new Date(nowMs()).toISOString();
   const today = () => nowIso().slice(0, 10);
 
   const getRec = (id) => {
     const a = typeof id === 'string' && ID_RE.test(id) ? store.get('assessments', id) : null;
     if (!a) throw err('assessment_unknown', 'no such assessment: ' + id, 404);
+    if (Number.isFinite(a.hwm) && a.hwm > hi) hi = a.hwm;
     return a;
   };
-  const save = (a) => store.put('assessments', a.id, a);
-  const revealOpen = (a) => (a.invitations.length > 0 && a.invitations.every((i) => a.commits[i.attestationId])) || nowMs() > Date.parse(a.commitBy);
+  const save = (a) => { a.hwm = Math.max(hi, a.hwm ?? 0); store.put('assessments', a.id, a); };
+  const revealOpen = (a) => !!a.revealOpenedAt || Object.keys(a.reveals).length > 0 || (a.invitations.length > 0 && a.invitations.every((i) => a.commits[i.attestationId])) || nowMs() > Date.parse(a.commitBy);
   const sigFail = (r) => { const e = err('bad_signature', 'signature refused: ' + r.reason, 401); e.reason = r.reason; return e; };
 
   function publicView(a) {
@@ -48,7 +58,9 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
     return clone({ id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, removed: a.removed ?? [], commits, reveals, late, state, credentialId: credentialId ?? null, revealOpen: open });
   }
 
+  let statsMemo = null; // invalidated when an assessment is finalized (single process per store)
   const finalizedStats = (excludeId) => {
+    if (excludeId === undefined || excludeId === null) { if (statsMemo) return statsMemo; }
     const records = [];
     for (const a of store.list('assessments')) {
       if (a.state !== 'finalized' || a.id === excludeId) continue;
@@ -57,11 +69,14 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       const b = c.sanad.bundle;
       records.push({ evidence: b.evidence.map((e) => ({ id: e.id, kind: e.kind })), marks: b.attestations.map((x) => ({ attestor: x.attestor, evidence: x.evidence, level: x.level })) });
     }
-    return attestorStats(records);
+    const out = attestorStats(records);
+    if (excludeId === undefined || excludeId === null) statsMemo = out;
+    return out;
   };
 
   const engine = {
     registerTemplate(t) {
+      checkIJson(t);
       assertTemplate(t);
       const hash = templateHash(t);
       const old = store.get('templates', t.id);
@@ -82,16 +97,18 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
     registerDid(doc) { return res.register(doc); },
     updateDid(did, version, jws) { return res.update(did, version, jws); },
 
-    createAssessment({ templateId, subject, claimedLevel, evidence, commitBy, revealBy, id } = {}) {
+    createAssessment({ templateId, subject, subjectDid, claimedLevel, evidence, commitBy, revealBy, id } = {}) {
       const rec = typeof templateId === 'string' && ID_RE.test(templateId) ? store.get('templates', templateId) : null;
       if (!rec) throw err('template_unknown', 'no such template: ' + templateId, 404);
       const t = rec.template;
-      if (typeof subject !== 'string' || !SUBJECT_RE.test(subject)) throw err('bad_subject', 'subject must be a pseudonymous URN such as urn:uuid:<uuid> (up to 200 characters, no spaces); names and contact details do not belong in the engine');
+      if (!subjectOk(subject)) throw err('bad_subject', 'subject must be a pseudonymous URN such as urn:uuid:<uuid> (no spaces, no personal namespace such as email, person, name or tel); names and contact details do not belong in the engine. This is a guard rail: the host remains responsible for choosing a non-identifying URN');
+      if (subjectDid !== undefined && !(typeof subjectDid === 'string' && /^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subjectDid) && subjectDid.length <= 200)) throw err('bad_subject', 'subjectDid must be a DID');
       if (!Number.isInteger(claimedLevel) || claimedLevel < 0 || claimedLevel > 5) throw err('bad_assessment', 'claimedLevel must be an integer from 0 to 5');
       const aid = id ?? 'as-' + randomBytes(8).toString('hex');
       if (typeof aid !== 'string' || !ID_RE.test(aid) || aid.length > 150) throw err('bad_assessment', 'id must match ' + ID_RE + ' and be at most 150 characters');
       if (store.get('assessments', aid)) throw err('assessment_exists', 'assessment exists: ' + aid, 409);
       if (!Array.isArray(evidence)) throw err('bad_evidence', 'evidence must be a list');
+      checkIJson(evidence);
       const plan = new Map(t.evidence.map((e) => [e.key, e]));
       const keys = evidence.map((e) => e?.key);
       if (keys.length !== plan.size || new Set(keys).size !== keys.length || !keys.every((k) => plan.has(k))) throw err('bad_evidence', 'evidence keys must be exactly ' + [...plan.keys()].join(', '));
@@ -113,7 +130,7 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       if (Number.isNaN(rb)) throw err('bad_assessment', 'revealBy must be an ISO date-time');
       if (!(rb > cb)) throw err('bad_assessment', 'revealBy must be after commitBy');
       const a = {
-        id: aid, templateId, templateHash: rec.hash, subject, claimedLevel, evidence: sealed,
+        id: aid, templateId, templateHash: rec.hash, subject, ...(subjectDid ? { subjectDid } : {}), claimedLevel, evidence: sealed,
         commitBy: new Date(cb).toISOString(), revealBy: new Date(rb).toISOString(), createdAt: nowIso(),
         invitations: [], commits: {}, reveals: {}, late: [], state: 'open', credentialId: null,
       };
@@ -130,7 +147,7 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       if (!ev) throw err('bad_evidence', 'unknown evidence item: ' + evidence);
       if (typeof attestor !== 'string' || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(attestor) || attestor.length > 200) throw err('bad_attestor', 'attestor must be a DID');
       if (!t.attestors.roles.includes(role)) throw err('bad_role', 'role must be one of ' + t.attestors.roles.join(', '));
-      if (attestor === a.subject) throw err('subject_as_attestor', 'the subject cannot attest their own work');
+      if (a.subjectDid && attestor === a.subjectDid) throw err('subject_as_attestor', 'the subject cannot attest their own work');
       const same = a.invitations.filter((i) => i.evidence === ev.id);
       if (same.some((i) => i.attestor === attestor)) throw err('duplicate_attestor', 'this attestor is already invited on ' + ev.id, 409);
       const seq = (a.seq ?? a.invitations.length) + 1;
@@ -163,12 +180,13 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       const inv = a.invitations.find((i) => i.attestationId === attestationId);
       if (!inv) throw err('not_invited', 'no invitation ' + attestationId, 403);
       if (a.commits[attestationId]) throw err('already_committed', 'a commit for ' + attestationId + ' exists', 409);
-      if (nowMs() > Date.parse(a.commitBy)) throw err('commit_closed', 'the commit phase ended at ' + a.commitBy, 409);
+      if (a.revealOpenedAt || Object.keys(a.reveals).length > 0 || nowMs() > Date.parse(a.commitBy)) throw err('commit_closed', 'the commit phase is over (deadline ' + a.commitBy + ' or reveals have begun)', 409);
       checkCommit({ payload, invitation: inv, assessment: a });
       const r = res.verifyStatement({ jws, payload, typ: COMMIT_TYP, signer: inv.attestor, date: today() });
       if (!r.ok) throw sigFail(r);
       const entry = log.append({ kind: 'commit', ref: hashOf(payload) });
       a.commits[attestationId] = { commit: payload.commit, payload: clone(payload), jws, at: nowIso(), logIndex: entry.index };
+      if (a.invitations.every((i) => a.commits[i.attestationId])) a.revealOpenedAt = nowIso();
       save(a);
       return { committed: Object.keys(a.commits).length, of: a.invitations.length };
     },
@@ -183,6 +201,10 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       if (!c) throw err('not_committed', 'no commit for ' + attestationId, 409);
       if (a.reveals[attestationId]) throw err('already_revealed', attestationId + ' is already revealed', 409);
       if (nowMs() > Date.parse(a.revealBy)) {
+        // recorded as late only when the statement is the invited attestor's own, validly signed: nobody can mark another attestor late
+        if (statement === null || typeof statement !== 'object' || statement.id !== attestationId || statement.attestor !== inv.attestor || !isIsoDate(statement.date)) throw err('bad_statement', 'a late reveal is recorded only for a statement of the invited attestor');
+        const lr = res.verifyStatement({ jws, payload: statement, typ: ATTESTATION_TYP, signer: inv.attestor, date: statement.date });
+        if (!lr.ok) throw sigFail(lr);
         if (!a.late.includes(attestationId)) { a.late.push(attestationId); a.late.sort(); save(a); }
         throw err('reveal_late', 'the reveal phase ended at ' + a.revealBy, 409);
       }
@@ -199,11 +221,17 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       const r = res.verifyStatement({ jws, payload: statement, typ: ATTESTATION_TYP, signer: inv.attestor, date: statement.date });
       if (!r.ok) throw sigFail(r);
       a.reveals[attestationId] = { statement: clone(statement), jws, at: nowIso() };
+      a.revealOpenedAt ??= nowIso();
       save(a);
       return { revealed: Object.keys(a.reveals).length, of: Object.keys(a.commits).length };
     },
 
-    finalize(assessmentId) {
+    /**
+     * Seals the credential. The template's minimum is enforced: every evidence item that needs human attestors (kind other than auto) must have at least
+     * `attestors.min` revealed attestors, and a live-sitting template needs revealed marks on sitting evidence. `allowShortfall: true` is the operator's
+     * explicit, recorded override (`process.shortfall`). Retrying after a crash is safe: log leaves are appended once and the credential id is derived.
+     */
+    finalize(assessmentId, { allowShortfall = false } = {}) {
       const a = getRec(assessmentId);
       if (a.state !== 'open') throw err('state', 'the assessment is already finalized', 409);
       const t = engine.getTemplate(a.templateId);
@@ -214,21 +242,29 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       const missing = committed.filter((k) => !a.reveals[k]);
       const notCommitted = a.invitations.map((i) => i.attestationId).filter((k) => !a.commits[k]).sort();
       const revealed = committed.filter((k) => a.reveals[k]);
-      const logIdx = committed.map((k) => a.commits[k].logIndex);
-      for (const k of missing) logIdx.push(log.append({ kind: 'missing-reveal', ref: a.commits[k].commit }).index);
+
+      // template minimum and live sitting
+      const shortfall = [];
+      const byEv = new Map(a.evidence.map((e) => [e.id, new Set()]));
+      for (const k of revealed) byEv.get(a.reveals[k].statement.evidence)?.add(a.reveals[k].statement.attestor);
+      for (const e of a.evidence) if (e.kind !== 'auto' && byEv.get(e.id).size < t.attestors.min) shortfall.push(`${e.id}: ${byEv.get(e.id).size} revealed attestor(s), template minimum ${t.attestors.min}`);
+      if (t.liveSitting && !a.evidence.some((e) => e.kind === 'sitting' && byEv.get(e.id).size > 0)) shortfall.push('liveSitting: no sitting evidence has a revealed attestor');
+      if (shortfall.length && !allowShortfall) throw err('below_template_minimum', 'the template requirements are not met (' + shortfall.join('; ') + '); pass allowShortfall to finalize anyway, which is recorded in the credential', 409);
 
       const attestors = [...new Set(revealed.map((k) => a.reveals[k].statement.attestor))];
-      const hist = finalizedStats(a.id);
+      const hist = finalizedStats();
       const stats = {};
-      for (const d of attestors) stats[d] = hist[d] ?? { sittings: 0, agreement: 0 };
-
+      for (const d of attestors) stats[d] = has(hist, d) ? hist[d] : { sittings: 0, agreement: 0 };
       const bundle = sealBundle({
         skill: t.skill.id, claimedLevel: a.claimedLevel, subject: a.subject, evidence: a.evidence,
         attestations: revealed.map((k) => ({ statement: a.reveals[k].statement, signature: a.reveals[k].jws })), attestors: stats,
       });
-      for (const x of bundle.attestations) logIdx.push(log.append({ kind: 'attestation', ref: x.hash }).index);
       const bundleHash = hashBundle(bundle);
-      logIdx.push(log.append({ kind: 'bundle', ref: bundleHash }).index);
+
+      const logIdx = committed.map((k) => a.commits[k].logIndex);
+      for (const k of missing) logIdx.push(log.appendOnce({ kind: 'missing-reveal', ref: a.commits[k].commit }).index);
+      for (const x of bundle.attestations) logIdx.push(log.appendOnce({ kind: 'attestation', ref: x.hash }).index);
+      logIdx.push(log.appendOnce({ kind: 'bundle', ref: bundleHash }).index);
 
       const cp = log.checkpoint();
       const idx = [...new Set(logIdx)].sort((x, y) => x - y);
@@ -239,13 +275,19 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
         checkpoint: cp,
       };
       const dids = [...new Set([issuer.did, logSigner.did, ...attestors])].filter((d) => !d.startsWith(DID_KEY)).map((d) => res.get(d)).filter(Boolean);
-      const process = { invited: a.invitations.length, committed: committed.length, revealed: revealed.length, missing, late: [...a.late], notCommitted, ...((a.removed ?? []).length ? { removed: a.removed.map((r) => r.attestationId).sort() } : {}) };
+      const process = {
+        invited: a.invitations.length, committed: committed.length, revealed: revealed.length, missing, late: [...a.late], notCommitted,
+        ...((a.removed ?? []).length ? { removed: a.removed.map((r) => r.attestationId).sort() } : {}),
+        ...(shortfall.length ? { shortfall } : {}),
+      };
       const doc = buildCredential({
         bundle, issuer, template: { id: t.id, hash: a.templateHash }, assessment: a.id, process, policy: t.policy, log: embedded, dids, now: nowMs(),
+        id: uuidFrom(a.id + ':' + bundleHash),
       });
       store.put('credentials', doc.id, doc);
       a.state = 'finalized'; a.credentialId = doc.id; a.finalizedAt = nowIso();
       save(a);
+      statsMemo = null;
       return clone(doc);
     },
 
@@ -261,11 +303,14 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
     listAssessments() { return store.list('assessments').map((a) => ({ id: a.id, templateId: a.templateId, subject: a.subject, state: a.state, credentialId: a.credentialId ?? null, createdAt: a.createdAt })); },
 
     verifyCredential(doc, opts = {}) {
-      return verifyDoc(doc, { ...opts, resolver: opts.resolver ?? res, trustedIssuers: opts.trustedIssuers ?? [issuer.did], trustedLogKeys: opts.trustedLogKeys ?? [logSigner.did] });
+      // the engine's own issuer, log key and registered DIDs are the defaults of an operator checking its own output; policy and day are never defaulted
+      let template = opts.template;
+      if (template === undefined) { try { const tid = doc?.sanad?.template?.id; const rec = typeof tid === 'string' && ID_RE.test(tid) ? store.get('templates', tid) : null; if (rec && rec.hash === doc.sanad.template.hash) template = rec.template; } catch { /* verified without */ } }
+      return verifyDoc(doc, { ...opts, resolver: opts.resolver ?? res, trustedIssuers: opts.trustedIssuers ?? [issuer.did], trustedLogKeys: opts.trustedLogKeys ?? [logSigner.did], trustedLogIds: opts.trustedLogIds ?? [logId], ...(template ? { template } : {}) });
     },
     stats(did) {
       const all = finalizedStats(null);
-      return did === undefined ? all : (all[did] ?? { sittings: 0, agreement: 0 });
+      return did === undefined ? all : (typeof did === 'string' && has(all, did) ? all[did] : { sittings: 0, agreement: 0 });
     },
     log,
     resolver: res,
@@ -282,9 +327,11 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       const base = policy ? { ...policy } : policyFromTemplate(t, today());
       delete base.id;
       const pol = { ...base, asOf: policy?.asOf ?? today() };
+      const pp = validatePolicy(pol);
+      if (pp.length) throw err('bad_policy', 'policy refused: ' + pp.join('; '));
       const revealed = Object.keys(a.reveals).sort();
-      const hist = finalizedStats(a.id), stats = {};
-      for (const k of revealed) { const d = a.reveals[k].statement.attestor; stats[d] = hist[d] ?? { sittings: 0, agreement: 0 }; }
+      const hist = finalizedStats(), stats = {};
+      for (const k of revealed) { const d = a.reveals[k].statement.attestor; stats[d] = has(hist, d) ? hist[d] : { sittings: 0, agreement: 0 }; }
       const bundle = sealBundle({
         skill: t.skill.id, claimedLevel: a.claimedLevel, subject: a.subject, evidence: a.evidence,
         attestations: revealed.map((k) => ({ statement: a.reveals[k].statement, signature: a.reveals[k].jws })), attestors: stats,

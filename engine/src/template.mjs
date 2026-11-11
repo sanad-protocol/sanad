@@ -1,5 +1,5 @@
 // Assessment templates: schema check, hash and the recommended verifier policy. Schema in DESIGN.md section 10.
-import { hashOf } from './core.mjs';
+import { hashOf, policyProblems } from './core.mjs';
 import { EngineError } from './errors.mjs';
 
 const ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
@@ -219,3 +219,6 @@ export function nativeOfNonce(nonce) {
   const m = typeof nonce === 'string' ? NATIVE_NONCE.exec(nonce) : null;
   return m ? m[1] : null;
 }
+
+/** Every field of a verifier policy (the seven fields and asOf) is required and range-checked. Returns the problems; empty means usable. */
+export function validatePolicy(p) { return policyProblems(p); }

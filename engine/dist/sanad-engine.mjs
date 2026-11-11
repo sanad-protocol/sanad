@@ -18,6 +18,7 @@ __export(core_exports, {
   SANAD_VERSION: () => SANAD_VERSION,
   WEIGHT: () => WEIGHT,
   applyTamper: () => applyTamper,
+  assertPolicy: () => assertPolicy,
   attestationHashOf: () => attestationHashOf,
   attestationPayload: () => attestationPayload,
   canonical: () => canonical,
@@ -30,6 +31,7 @@ __export(core_exports, {
   graphFromEdges: () => graphFromEdges,
   hashOf: () => hashOf,
   infer: () => infer,
+  policyProblems: () => policyProblems,
   recognise: () => recognise,
   sampleCredential: () => sampleCredential,
   sealAttestations: () => sealAttestations,
@@ -253,6 +255,25 @@ function dayNumber(iso) {
   const d = new Date(t);
   return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? t / 864e5 : NaN;
 }
+var isNum = (v) => typeof v === "number" && Number.isFinite(v);
+function policyProblems(p) {
+  const why = [];
+  if (p === null || typeof p !== "object" || Array.isArray(p)) return ["policy must be an object"];
+  const o = p;
+  if (!(isNum(o.minAttestors) && Number.isInteger(o.minAttestors) && o.minAttestors >= 1)) why.push("minAttestors must be an integer of at least 1");
+  if (typeof o.requireLive !== "boolean") why.push("requireLive must be true or false");
+  if (!(isNum(o.halfLifeMonths) && o.halfLifeMonths > 0)) why.push("halfLifeMonths must be a number above 0");
+  if (!(isNum(o.minAttestorSittings) && o.minAttestorSittings >= 0)) why.push("minAttestorSittings must be a number of at least 0");
+  if (!(isNum(o.minAgreement) && o.minAgreement >= 0 && o.minAgreement <= 1)) why.push("minAgreement must be a number from 0 to 1");
+  if (!(isNum(o.maxInferenceDepth) && Number.isInteger(o.maxInferenceDepth) && o.maxInferenceDepth >= 0)) why.push("maxInferenceDepth must be an integer of at least 0");
+  if (!(isNum(o.inferenceDecay) && o.inferenceDecay >= 0 && o.inferenceDecay <= 1)) why.push("inferenceDecay must be a number from 0 to 1");
+  if (typeof o.asOf !== "string" || Number.isNaN(dayNumber(o.asOf))) why.push("asOf must be an ISO date yyyy-mm-dd");
+  return why;
+}
+function assertPolicy(p) {
+  const w = policyProblems(p);
+  if (w.length) throw new RangeError(w.join("; "));
+}
 var levelOk = (v) => Number.isInteger(v) && v >= 0 && v <= 5;
 function checkIntegrity(cred, opts = {}) {
   const evs = [...cred.evidence].sort(byId), atts = [...cred.attestations].sort(byId);
@@ -289,6 +310,8 @@ function checkIntegrity(cred, opts = {}) {
     }
     const expectPrev = i === 0 ? "GENESIS" : atts[i - 1].hash;
     if (a.prev !== expectPrev) why.push("chain break: it does not link to the attestation before it");
+    const dup = atts.slice(0, i).find((x) => x.attestor === a.attestor && x.evidence === a.evidence);
+    if (dup) why.push("duplicate mark: " + a.attestor + " already has attestation " + dup.id + " on this evidence item (only the first counts)");
     if (!evOk.has(a.evidence)) why.push('it attests evidence "' + a.evidence + '" that is not in the credential');
     else if (!evOk.get(a.evidence)) why.push('it attests evidence "' + a.evidence + '" that failed integrity');
     if (Number.isNaN(dayNumber(a.date))) why.push("date is not a valid yyyy-mm-dd");
@@ -297,9 +320,8 @@ function checkIntegrity(cred, opts = {}) {
   return { evidence, attestations };
 }
 function recognise(cred, policy, opts = {}) {
-  if (!(policy.halfLifeMonths > 0) || !Number.isFinite(policy.halfLifeMonths)) throw new RangeError("halfLifeMonths must be a positive number");
+  assertPolicy(policy);
   const asOf = dayNumber(policy.asOf);
-  if (Number.isNaN(asOf)) throw new RangeError("asOf must be an ISO date yyyy-mm-dd");
   const minAtt = Math.max(1, Math.floor(policy.minAttestors));
   const steps = [];
   const dropped = [];
@@ -343,7 +365,8 @@ function recognise(cred, policy, opts = {}) {
     if (e.kind === "auto") continue;
     const st = cred.attestors[a.attestor] ?? { sittings: 0, agreement: 0 };
     let why = "";
-    if (a.conflictDeclared) why = "a conflict of interest was declared";
+    if (opts.allowAttestor && !opts.allowAttestor(a.attestor)) why = "the attestor is not on the verifier's allow-list";
+    else if (a.conflictDeclared) why = "a conflict of interest was declared";
     else if (st.sittings < policy.minAttestorSittings) why = `only ${st.sittings} sitting(s), policy needs ${policy.minAttestorSittings}`;
     else if (st.agreement < policy.minAgreement) why = `agreement with other examiners is ${f2(st.agreement)}, policy needs ${f2(policy.minAgreement)}`;
     if (why) {
@@ -440,6 +463,8 @@ function graphFromEdges(ids, edges) {
 }
 var round32 = (x) => Math.round(x * 1e3) / 1e3;
 function infer(graph, skill, level, confidence, policy, directClaims = []) {
+  if (!(Number.isInteger(policy.maxInferenceDepth) && policy.maxInferenceDepth >= 0)) throw new RangeError("maxInferenceDepth must be an integer of at least 0");
+  if (!(Number.isFinite(policy.inferenceDecay) && policy.inferenceDecay >= 0 && policy.inferenceDecay <= 1)) throw new RangeError("inferenceDecay must be a number from 0 to 1");
   const direct = new Set(directClaims);
   direct.add(skill);
   const out = [];
@@ -578,8 +603,18 @@ function modPow(b, e, m) {
   return r;
 }
 var inv = (a) => modPow((a % P25519 + P25519) % P25519, P25519 - 2n, P25519);
+var SMALL_CACHE = /* @__PURE__ */ new Map();
 function isSmallOrderKey(raw32) {
   if (!(raw32 instanceof Uint8Array) || raw32.length !== 32) return true;
+  const k = Buffer.from(raw32).toString("hex");
+  const hit = SMALL_CACHE.get(k);
+  if (hit !== void 0) return hit;
+  const v = computeSmallOrder(raw32);
+  if (SMALL_CACHE.size >= 1024) SMALL_CACHE.delete(SMALL_CACHE.keys().next().value);
+  SMALL_CACHE.set(k, v);
+  return v;
+}
+function computeSmallOrder(raw32) {
   let y = 0n;
   for (let i = 31; i >= 0; i--) y = y << 8n | BigInt(raw32[i]);
   y &= (1n << 255n) - 1n;
@@ -715,18 +750,18 @@ function createResolver({ store } = {}) {
       return load(did);
     },
     register(doc) {
-      const bad = (m) => new EngineError("bad_did_document", m, 400);
-      if (!isObj(doc) || !exactly(doc, ["id", "versions"])) throw bad("a DID document history has exactly id and versions");
-      if (typeof doc.id !== "string" || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(doc.id) || doc.id.length > 200) throw bad("bad DID");
+      const bad2 = (m) => new EngineError("bad_did_document", m, 400);
+      if (!isObj(doc) || !exactly(doc, ["id", "versions"])) throw bad2("a DID document history has exactly id and versions");
+      if (typeof doc.id !== "string" || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(doc.id) || doc.id.length > 200) throw bad2("bad DID");
       if (doc.id.startsWith(DID_KEY)) throw new EngineError("bad_did_document", "did:key needs no registration", 400);
-      if (!Array.isArray(doc.versions) || doc.versions.length !== 1) throw bad("registration carries exactly version 1");
+      if (!Array.isArray(doc.versions) || doc.versions.length !== 1) throw bad2("registration carries exactly version 1");
       const v = doc.versions[0];
       try {
         checkVersion(v, { expectRevokedEmpty: true });
       } catch (e) {
-        throw bad(e.message);
+        throw bad2(e.message);
       }
-      if (v.version !== 1) throw bad("the first version must be 1");
+      if (v.version !== 1) throw bad2("the first version must be 1");
       if (load(doc.id)) throw new EngineError("did_exists", "DID already registered: " + doc.id, 409);
       save(doc.id, { id: doc.id, versions: [clone(v)] });
       return load(doc.id);
@@ -734,17 +769,17 @@ function createResolver({ store } = {}) {
     update(did, version, jws) {
       const hist = load(did);
       if (!hist) throw new EngineError("did_unknown", "DID not registered: " + did, 404);
-      const bad = (m) => new EngineError("bad_did_update", m, 400);
+      const bad2 = (m) => new EngineError("bad_did_update", m, 400);
       try {
         checkVersion(version, { expectRevokedEmpty: false });
       } catch (e) {
-        throw bad(e.message);
+        throw bad2(e.message);
       }
       const last = hist.versions[hist.versions.length - 1];
-      if (version.version !== last.version + 1) throw bad("version must be " + (last.version + 1));
-      if (version.validFrom < last.validFrom) throw bad("validFrom must not be before the previous version");
+      if (version.version !== last.version + 1) throw bad2("version must be " + (last.version + 1));
+      if (version.validFrom < last.validFrom) throw bad2("validFrom must not be before the previous version");
       const res = resolver.verifyStatement({ jws, payload: { did, ...version }, typ: DID_UPDATE_TYP, signer: did, date: version.validFrom });
-      if (!res.ok) throw bad("update signature refused: " + res.reason);
+      if (!res.ok) throw bad2("update signature refused: " + res.reason);
       hist.versions.push(clone(version));
       save(did, hist);
       return load(did);
@@ -858,7 +893,7 @@ var KINDS2 = ["auto", "sitting", "artifact", "peer"];
 var isObj3 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 var isStr2 = (v) => typeof v === "string" && v.length > 0;
 var isLevel = (v) => Number.isInteger(v) && v >= 0 && v <= 5;
-var isNum = (v) => typeof v === "number" && Number.isFinite(v);
+var isNum2 = (v) => typeof v === "number" && Number.isFinite(v);
 function jsonSafe(v, depth = 0) {
   if (depth > 12) return false;
   if (v === null || typeof v === "string" || typeof v === "boolean") return true;
@@ -962,7 +997,7 @@ function validateTemplate(t) {
         }
         if ("summary" in e && typeof e.summary !== "string") errors.push(w + ".summary: must be a string");
         if ("live" in e && typeof e.live !== "boolean") errors.push(w + ".live: must be true or false");
-        if ("minutes" in e && !(isNum(e.minutes) && e.minutes > 0)) errors.push(w + ".minutes: must be a positive number");
+        if ("minutes" in e && !(isNum2(e.minutes) && e.minutes > 0)) errors.push(w + ".minutes: must be a positive number");
       });
     }
   }
@@ -993,7 +1028,7 @@ function validateTemplate(t) {
     if (!isObj3(d)) errors.push("deadlines: must be an object");
     else {
       closed(d, ["commitHours", "revealHours"], [], "deadlines", errors);
-      for (const k of ["commitHours", "revealHours"]) if (k in d && !(isNum(d[k]) && d[k] > 0 && d[k] <= MAX_HOURS)) errors.push("deadlines." + k + ": must be a positive number of at most " + MAX_HOURS);
+      for (const k of ["commitHours", "revealHours"]) if (k in d && !(isNum2(d[k]) && d[k] > 0 && d[k] <= MAX_HOURS)) errors.push("deadlines." + k + ": must be a positive number of at most " + MAX_HOURS);
     }
   }
   if ("levelMap" in t) {
@@ -1011,7 +1046,7 @@ function validateTemplate(t) {
       closed(p, ["id", ...POLICY_FIELDS], [], "policy", errors);
       if ("id" in p && !(typeof p.id === "string" && ID_RE.test(p.id))) errors.push("policy.id: must match " + ID_RE);
       const num = (k, ok, what) => {
-        if (k in p && !(isNum(p[k]) && ok(p[k]))) errors.push("policy." + k + ": must be " + what);
+        if (k in p && !(isNum2(p[k]) && ok(p[k]))) errors.push("policy." + k + ": must be " + what);
       };
       num("minAttestors", (v) => Number.isInteger(v) && v >= 1, "an integer of at least 1");
       if ("requireLive" in p && typeof p.requireLive !== "boolean") errors.push("policy.requireLive: must be true or false");
@@ -1057,6 +1092,9 @@ function nonceWithNative(native, random) {
 function nativeOfNonce(nonce) {
   const m = typeof nonce === "string" ? NATIVE_NONCE.exec(nonce) : null;
   return m ? m[1] : null;
+}
+function validatePolicy(p) {
+  return policyProblems(p);
 }
 
 // engine/src/stats.mjs
@@ -1247,6 +1285,15 @@ function createLog({ store, stream = "log", logId, signer = null, clock = { now:
   if (typeof logId !== "string" || !logId) throw new EngineError("bad_config", "logId is required");
   const stored = store.read(stream);
   const hashes = stored.map((e) => e?.leafHash);
+  const byLeaf = /* @__PURE__ */ new Map();
+  stored.forEach((e, i) => {
+    try {
+      const l = JSON.parse(e.leaf);
+      const k = l.kind + ":" + l.ref;
+      if (!byLeaf.has(k)) byLeaf.set(k, i);
+    } catch {
+    }
+  });
   let lastHash = stored.length ? stored[stored.length - 1]?.hash : "GENESIS";
   const size = () => hashes.length;
   const sz = (s) => {
@@ -1269,7 +1316,18 @@ function createLog({ store, stream = "log", logId, signer = null, clock = { now:
       if (at !== entry.index) throw new EngineError("log_conflict", "stream index does not match the log", 500);
       hashes.push(lh);
       lastHash = entry.hash;
+      const key = kind + ":" + ref;
+      if (!byLeaf.has(key)) byLeaf.set(key, entry.index);
       return { index: entry.index, leaf, leafHash: lh };
+    },
+    /** Appends the leaf unless a leaf of the same kind and ref is already in the log (idempotent retry); returns { index, leaf, leafHash, existed }. */
+    appendOnce({ kind, ref } = {}) {
+      const at = byLeaf.get(kind + ":" + ref);
+      if (at !== void 0) {
+        const e = store.read(stream, at, at + 1)[0];
+        return { index: at, leaf: e.leaf, leafHash: e.leafHash, existed: true };
+      }
+      return { ...this.append({ kind, ref }), existed: false };
     },
     size,
     root: (s) => rootOf(s),
@@ -1290,8 +1348,8 @@ function createLog({ store, stream = "log", logId, signer = null, clock = { now:
     verifyChain() {
       const all = store.read(stream);
       if (all.length !== hashes.length) return { ok: false, at: Math.min(all.length, hashes.length) };
-      const bad = firstBadEntry(all, hashes);
-      return bad < 0 ? { ok: true } : { ok: false, at: bad };
+      const bad2 = firstBadEntry(all, hashes);
+      return bad2 < 0 ? { ok: true } : { ok: false, at: bad2 };
     },
     findByRef(ref) {
       return store.read(stream).filter((e) => {
@@ -1782,6 +1840,10 @@ function buildCredential({ bundle, issuer, template, assessment, process: proces
   const jws = issuer.sign(CREDENTIAL_TYP, clone2(doc));
   return { ...doc, proof: { type: "SanadDetachedJws", verificationMethod: issuer.kid, created: validFrom, jws } };
 }
+var VERIFY_LIMITS = { attestations: 200, evidence: 200, logEntries: 2e3, dids: 100 };
+var NOTICE = "Experimental software: the Sanad engine has not been cryptographically reviewed and no independent implementation checks its output. A passing report records what was signed and logged, not that the attestors were honest.";
+var PROCESS_BASE = ["invited", "committed", "revealed", "missing", "late", "notCommitted"];
+var processOk = (pr) => isObj4(pr) && PROCESS_BASE.every((k) => k in pr) && Object.keys(pr).every((k) => PROCESS_BASE.includes(k) || k === "removed" || k === "shortfall") && ["removed", "shortfall"].every((k) => !(k in pr) || Array.isArray(pr[k]) && pr[k].every(isStr3));
 var POLICY_KEYS = ["minAttestors", "requireLive", "halfLifeMonths", "minAttestorSittings", "minAgreement", "maxInferenceDepth", "inferenceDecay"];
 function shapeProblems(doc) {
   const p = [];
@@ -1807,12 +1869,21 @@ function shapeProblems(doc) {
   }
   need(exactly2(s.template, ["id", "hash"]), "sanad.template members");
   need(isStr3(s.assessment), "sanad.assessment must be a string");
-  need(exactly2(s.process, ["invited", "committed", "revealed", "missing", "late", "notCommitted"]) || exactly2(s.process, ["invited", "committed", "revealed", "missing", "late", "notCommitted", "removed"]) && Array.isArray(s.process.removed) && s.process.removed.every(isStr3), "sanad.process members");
+  need(processOk(s.process), "sanad.process members");
   need(exactly2(s.policy, ["id", ...POLICY_KEYS]), "sanad.policy members");
   need(Array.isArray(s.dids) && s.dids.every((d) => exactly2(d, ["id", "versions"]) && isStr3(d.id) && Array.isArray(d.versions)), "sanad.dids must be a list of { id, versions }");
+  if (Array.isArray(s.dids) && s.dids.length > VERIFY_LIMITS.dids) p.push("too many DID histories (limit " + VERIFY_LIMITS.dids + ")");
+  if (isObj4(s.log) && Array.isArray(s.log.entries) && s.log.entries.length > VERIFY_LIMITS.logEntries) {
+    p.push("too many log entries (limit " + VERIFY_LIMITS.logEntries + ")");
+    return p;
+  }
   const l = s.log;
   need(exactly2(l, ["logId", "logKey", "entries", "proofs", "checkpoint"]) && Array.isArray(l.entries) && Array.isArray(l.proofs) && l.entries.every((e) => exactly2(e, ["index", "leaf"])) && l.proofs.every((e) => exactly2(e, ["index", "size", "proof"])) && exactly2(l.checkpoint, ["payload", "jws"]), "sanad.log members");
   const b = s.bundle;
+  if (isObj4(b) && (Array.isArray(b.attestations) && b.attestations.length > VERIFY_LIMITS.attestations || Array.isArray(b.evidence) && b.evidence.length > VERIFY_LIMITS.evidence)) {
+    p.push("too many evidence items or attestations (limits " + VERIFY_LIMITS.evidence + " and " + VERIFY_LIMITS.attestations + ")");
+    return p;
+  }
   if (!exactly2(b, ["skill", "claimedLevel", "subject", "evidence", "attestations", "attestors"])) {
     p.push("bundle members must be exactly skill, claimedLevel, subject, evidence, attestations, attestors");
     return p;
@@ -1835,23 +1906,45 @@ function shapeProblems(doc) {
   if (new Set(b.attestations.map((a) => a.id)).size !== b.attestations.length) p.push("duplicate attestation id");
   return p;
 }
-function verifierResolver(given, dids) {
-  const embedded = /* @__PURE__ */ new Map();
-  for (const d of Array.isArray(dids) ? dids : []) if (isObj4(d) && isStr3(d.id)) embedded.set(d.id, d);
-  const emb = createResolver({ store: { get: (c, id) => embedded.get(id) ?? null, put() {
+function verifierResolver(given, embeddedDids, trusted) {
+  const known = (list) => {
+    const m = /* @__PURE__ */ new Map();
+    for (const d of Array.isArray(list) ? list : []) if (isObj4(d) && isStr3(d.id)) m.set(d.id, d);
+    return m;
+  };
+  const emb = createResolver({ store: { get: (c, id) => known(embeddedDids).get(id) ?? null, put() {
   } } });
-  const pick = (did) => given && typeof given.get === "function" && isStr3(did) && !did.startsWith(DID_KEY2) && given.get(did) ? given : emb;
+  const tr = createResolver({ store: { get: (c, id) => known(trusted).get(id) ?? null, put() {
+  } } });
+  const usedEmbedded = /* @__PURE__ */ new Map();
+  const has2 = (r, did) => {
+    try {
+      return !!(r && typeof r.get === "function" && isStr3(did) && !did.startsWith(DID_KEY2) && r.get(did));
+    } catch {
+      return false;
+    }
+  };
+  const pick = (did) => has2(given, did) ? { r: given, emb: false } : has2(tr, did) ? { r: tr, emb: false } : { r: emb, emb: true };
   return {
+    usedEmbedded,
     keysAt(did, date) {
       try {
-        return pick(did).keysAt(did, date);
+        return pick(did).r.keysAt(did, date);
       } catch {
         return [];
       }
     },
     verifyStatement(arg) {
       try {
-        return pick(arg.signer).verifyStatement(arg);
+        const { r, emb: isEmb } = pick(arg.signer);
+        const res = r.verifyStatement(arg);
+        if (res.ok && isEmb && !String(arg.signer).startsWith(DID_KEY2)) {
+          const key = r.keysAt(arg.signer, arg.date).find((k) => k.kid === res.kid);
+          const mb = key ? "z" + base58btcEncode(key.publicKey) : "?";
+          if (!usedEmbedded.has(arg.signer)) usedEmbedded.set(arg.signer, /* @__PURE__ */ new Set());
+          usedEmbedded.get(arg.signer).add(mb);
+        }
+        return res;
       } catch {
         return { ok: false, reason: "bad_did_history" };
       }
@@ -1859,10 +1952,11 @@ function verifierResolver(given, dids) {
   };
 }
 var ADD = (checks, name, ok, detail) => checks.push({ name, ok, detail });
+var isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
 function verifyCredential(doc, opts = {}) {
   const checks = [], warnings = [];
-  let recognition = null, inferred = [];
-  const done = () => ({ ok: checks.every((c) => c.ok), checks, recognition, inferred, warnings });
+  let recognition = null, inferred = [], basis = null;
+  const done = () => ({ ok: checks.every((c) => c.ok), checks, recognition, inferred, warnings, basis, notice: NOTICE });
   try {
     if (!isObj4(doc)) {
       ADD(checks, "shape", false, "the credential must be a JSON object");
@@ -1872,7 +1966,7 @@ function verifyCredential(doc, opts = {}) {
     ADD(checks, "shape", problems.length === 0, problems.length ? problems.join("; ") : "closed member sets everywhere; no unknown members");
     if (problems.length) return done();
     const { sanad } = doc, bundle = sanad.bundle;
-    const resolver = verifierResolver(opts.resolver, sanad.dids);
+    const resolver = verifierResolver(opts.resolver, sanad.dids, opts.trustedDidHistories);
     const day = new Date(doc.validFrom).toISOString().slice(0, 10);
     {
       const { proof } = doc, { proof: _omit, ...body } = doc;
@@ -1895,20 +1989,25 @@ function verifyCredential(doc, opts = {}) {
       ADD(checks, "bundle-hash", why.length === 0, why.length ? why.join("; ") : "bundle hash " + h);
     }
     {
-      const bad = bundle.evidence.filter((e) => e.body.kind !== e.kind || e.body.date !== e.date).map((e) => e.id);
-      ADD(checks, "evidence-consistency", bad.length === 0, bad.length ? "kind or date differs from the hashed body in: " + bad.join(", ") : "kind and date equal the hashed body in every evidence item");
+      const bad2 = bundle.evidence.filter((e) => e.body.kind !== e.kind || e.body.date !== e.date).map((e) => e.id);
+      ADD(checks, "evidence-consistency", bad2.length === 0, bad2.length ? "kind or date differs from the hashed body in: " + bad2.join(", ") : "kind and date equal the hashed body in every evidence item");
+    }
+    {
+      const pre = sanad.assessment + ".";
+      const bad2 = [...bundle.evidence.map((e) => e.id), ...bundle.attestations.map((a) => a.id)].filter((id) => !id.startsWith(pre));
+      ADD(checks, "ids", bad2.length === 0, bad2.length ? `ids outside assessment ${sanad.assessment}: ${bad2.slice(0, 5).join(", ")}` : "every evidence and attestation id belongs to assessment " + sanad.assessment);
     }
     const sigReason = (a) => {
       const { prev: _p, ...stmt } = attestationPayload(a);
       return resolver.verifyStatement({ jws: a.signature, payload: stmt, typ: ATTESTATION_TYP, signer: a.attestor, date: a.date });
     };
     {
-      const bad = [];
+      const bad2 = [];
       for (const a of bundle.attestations) {
         const r = sigReason(a);
-        if (!r.ok) bad.push(`${a.id} (${r.reason})`);
+        if (!r.ok) bad2.push(`${a.id} (${r.reason})`);
       }
-      ADD(checks, "attestor-signatures", bad.length === 0, bad.length ? "signature refused: " + bad.join(", ") : `${bundle.attestations.length} attestor signature(s) verify on their dates`);
+      ADD(checks, "attestor-signatures", bad2.length === 0, bad2.length ? "signature refused: " + bad2.join(", ") : `${bundle.attestations.length} attestor signature(s) verify on their dates`);
     }
     {
       const l = sanad.log, why = [];
@@ -1916,6 +2015,7 @@ function verifyCredential(doc, opts = {}) {
       const sigOk = verifyCheckpoint(cp, (jws, payload, typ) => resolver.verifyStatement({ jws, payload, typ, signer: l.logKey, date: String(payload.timestamp).slice(0, 10) }).ok);
       if (!sigOk) why.push("checkpoint signature does not verify with the log key");
       if (sigOk && cp.payload.logId !== l.logId) why.push("checkpoint logId differs from the log id");
+      if (Array.isArray(opts.trustedLogIds) && !opts.trustedLogIds.includes(l.logId)) why.push("log id " + l.logId + " is not among the trusted log ids");
       const leaves = /* @__PURE__ */ new Map();
       if (sigOk) {
         for (const e of l.entries) {
@@ -1942,23 +2042,94 @@ function verifyCredential(doc, opts = {}) {
         for (const a of bundle.attestations) if (!leaves.has("attestation:" + a.hash)) why.push(`attestation ${a.id} is not a verified leaf of the log`);
         if (!leaves.has("bundle:" + doc.evidence[0].bundleHash)) why.push("the bundle hash is not a verified leaf of the log");
       }
-      if (Array.isArray(opts.trustedLogKeys)) {
-        if (!opts.trustedLogKeys.includes(l.logKey)) why.push("log key " + l.logKey + " is not among the trusted log keys");
-      } else warnings.push("log key not pinned");
       ADD(checks, "log", why.length === 0, why.length ? why.join("; ") : `${l.entries.length} embedded entr${l.entries.length === 1 ? "y" : "ies"} verified against the checkpoint of size ${cp.payload.size}; every attestation hash and the bundle hash are leaves`);
     }
-    if (Array.isArray(opts.trustedIssuers)) {
-      const ok = opts.trustedIssuers.includes(doc.issuer);
-      ADD(checks, "trusted-issuer", ok, ok ? "issuer is trusted: " + doc.issuer : "issuer " + doc.issuer + " is not among the trusted issuers");
-    } else warnings.push("issuer not pinned");
-    try {
-      const base = opts.policy ? { ...opts.policy } : { ...sanad.policy };
-      delete base.id;
-      const policy = { ...base, asOf: opts.policy?.asOf ?? opts.asOf ?? day };
-      recognition = recognise(bundle, policy, { verifySignature: (a) => sigReason(a).ok });
-      if (opts.graph && recognition.status !== "not-recognised") inferred = infer(opts.graph, bundle.skill, recognition.level, recognition.confidence, policy, [bundle.skill]);
-    } catch (e) {
-      ADD(checks, "recognition", false, "the recognition function refused the policy: " + (e?.message ?? e));
+    const pin = (name, label, list, value) => {
+      if (Array.isArray(list)) {
+        const ok = list.includes(value);
+        ADD(checks, name, ok, ok ? `${label} is pinned: ${value}` : `${label} ${value} is not among the pinned ${label}s`);
+      } else if (opts.allowUnpinned === true) {
+        ADD(checks, name, true, `${label} not pinned (allowUnpinned): ${value}`);
+        warnings.push(`${label} not pinned`);
+      } else ADD(checks, name, false, `${label} ${value} is not pinned: pass ${name === "trusted-issuer" ? "trustedIssuers" : "trustedLogKeys"}, or allowUnpinned to accept any`);
+    };
+    pin("trusted-issuer", "issuer", opts.trustedIssuers, doc.issuer);
+    pin("trusted-log-key", "log key", opts.trustedLogKeys, sanad.log.logKey);
+    if (resolver.usedEmbedded.size) {
+      const pinned = isObj4(opts.pinnedKeys) ? opts.pinnedKeys : {};
+      const bad2 = [];
+      for (const [did, keys] of resolver.usedEmbedded) for (const k of keys) if (!(Array.isArray(pinned[did]) && pinned[did].includes(k))) bad2.push(`${did} (key ${k.slice(0, 12)}...)`);
+      if (bad2.length && opts.allowEmbeddedDids === true) {
+        warnings.push("DID histories embedded in the credential were trusted (allowEmbeddedDids): " + bad2.join(", "));
+        ADD(checks, "did-histories", true, "embedded did histories accepted without pinned keys (allowEmbeddedDids)");
+      } else {
+        if (bad2.length) warnings.push("embedded DID histories are the issuer's own claim; pin the keys (pinnedKeys) or supply the histories (trustedDidHistories): " + bad2.join(", "));
+        ADD(checks, "did-histories", bad2.length === 0, bad2.length ? "keys known only from histories embedded in the credential and not pinned by the verifier: " + bad2.join(", ") : "every did:web key used is pinned by the verifier");
+      }
+    }
+    if (opts.template !== void 0) {
+      const why = [];
+      try {
+        const t = opts.template;
+        if (templateHash(t) !== sanad.template.hash) why.push("the supplied template does not have the credential's template hash");
+        if (t.id !== sanad.template.id) why.push("template id differs");
+        const roles = t.attestors?.roles ?? [];
+        for (const a of bundle.attestations) if (!roles.includes(a.role)) why.push(`attestation ${a.id} has role "${a.role}", which the template does not list`);
+        const kinds = new Map((t.evidence ?? []).map((e) => [sanad.assessment + "." + e.key, e.kind]));
+        for (const e of bundle.evidence) if (kinds.get(e.id) !== e.kind) why.push(`evidence ${e.id} is not an item of kind ${e.kind} of the template`);
+      } catch {
+        why.push("the supplied template is not usable");
+      }
+      ADD(checks, "template", why.length === 0, why.length ? why.join("; ") : "template hash, roles and evidence kinds match");
+    } else warnings.push("template not supplied: roles and evidence kinds were not checked against it");
+    if (Array.isArray(sanad.process.shortfall) && sanad.process.shortfall.length) warnings.push("the operator finalized below the template minimum: " + sanad.process.shortfall.join("; "));
+    let pol = null, polSource = null, asOfSource = null;
+    if (opts.policy !== void 0) {
+      pol = isObj4(opts.policy) ? { ...opts.policy } : opts.policy;
+      polSource = "verifier";
+    } else if (opts.useRecommendedPolicy === true) {
+      pol = { ...sanad.policy };
+      delete pol.id;
+      polSource = "issuer-recommendation";
+    }
+    if (isObj4(pol)) {
+      if (pol.asOf !== void 0) asOfSource = "policy";
+      else if (opts.asOf !== void 0) {
+        pol.asOf = opts.asOf;
+        asOfSource = "option";
+      } else if (opts.useVerifierClock === true) {
+        pol.asOf = isoDay(opts.now ?? Date.now());
+        asOfSource = "verifier-clock";
+      } else if (polSource === "issuer-recommendation") {
+        pol.asOf = day;
+        asOfSource = "credential-date";
+      }
+    }
+    if (pol === null) ADD(checks, "policy", false, "no verifier policy supplied: pass policy (all seven fields and asOf), or useRecommendedPolicy to take the issuer's recommendation knowingly");
+    else {
+      const pp = validatePolicy(pol);
+      ADD(checks, "policy", pp.length === 0, pp.length ? "policy refused: " + pp.join("; ") : `${polSource} policy; evaluation day ${pol.asOf} (${asOfSource})`);
+      if (pp.length === 0) {
+        basis = { policySource: polSource === "verifier" ? "verifier" : "issuer-recommendation", asOfSource };
+        const own = opts.attestorStats;
+        if (own !== void 0) {
+          const okShape = isObj4(own) && Object.values(own).every((st) => isObj4(st) && Number.isFinite(st.sittings) && Number.isFinite(st.agreement));
+          ADD(checks, "attestor-statistics", okShape, okShape ? "verifier-supplied statistics replace the issuer's" : "attestorStats must map DIDs to { sittings, agreement }");
+        } else if (pol.minAttestorSittings > 0 || pol.minAgreement > 0) {
+          const allow = opts.allowIssuerStatistics === true;
+          ADD(checks, "attestor-statistics", allow, allow ? "issuer-supplied statistics used for a threshold (allowIssuerStatistics)" : "the policy has a statistics threshold but the only statistics are the issuer's, which no verifier can recompute from the log: pass attestorStats, or allowIssuerStatistics");
+          if (allow) warnings.push("issuer-supplied statistics used for a threshold; they are not recomputable from the hash-only log");
+        }
+        try {
+          const cred = isObj4(own) ? { ...bundle, attestors: own } : bundle;
+          const ropts = { verifySignature: (a) => sigReason(a).ok };
+          if (Array.isArray(opts.allowedAttestors)) ropts.allowAttestor = (d) => opts.allowedAttestors.includes(d);
+          recognition = recognise(cred, pol, ropts);
+          if (opts.graph && recognition.status !== "not-recognised") inferred = infer(opts.graph, bundle.skill, recognition.level, recognition.confidence, pol, [bundle.skill]);
+        } catch (e) {
+          ADD(checks, "recognition", false, "the recognition function refused the input: " + (e?.message ?? e));
+        }
+      }
     }
   } catch (e) {
     ADD(checks, "internal", false, "verification failed unexpectedly: " + (e?.message ?? e));
@@ -2006,9 +2177,90 @@ function prepareReveal({ signer, assessment, ticket, attestationId, secret, date
 }
 
 // engine/src/engine.mjs
-import { randomBytes as randomBytes2 } from "node:crypto";
+import { randomBytes as randomBytes2, createHash as createHash3 } from "node:crypto";
+
+// engine/src/ijson.mjs
+var MAX_DEPTH = 64;
+var bad = (code, message) => new EngineError(code, message, 400);
+var LONE = /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/;
+function scanJsonText(text, { maxDepth = MAX_DEPTH } = {}) {
+  let depth = 0, inStr = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (inStr) {
+      if (c === 92) i++;
+      else if (c === 34) inStr = false;
+      continue;
+    }
+    if (c === 34) {
+      inStr = true;
+      continue;
+    }
+    if (c === 91 || c === 123) {
+      if (++depth > maxDepth) throw bad("too_deep", "JSON nesting is deeper than " + maxDepth);
+      continue;
+    }
+    if (c === 93 || c === 125) {
+      depth--;
+      continue;
+    }
+    if (c === 45 || c >= 48 && c <= 57) {
+      let j = i + 1;
+      while (j < text.length) {
+        const d = text.charCodeAt(j);
+        if (d >= 48 && d <= 57 || d === 46 || d === 101 || d === 69 || d === 43 || d === 45) j++;
+        else break;
+      }
+      const tok = text.slice(i, j), n = Number(tok);
+      if (!Number.isFinite(n)) throw bad("bad_number", "a number is not finite: " + tok.slice(0, 20));
+      if (/^-?\d+$/.test(tok) && !Number.isSafeInteger(n)) throw bad("bad_number", "an integer beyond 2^53 cannot be represented exactly: " + tok.slice(0, 20));
+      i = j - 1;
+    }
+  }
+}
+function checkIJson(v, { maxDepth = MAX_DEPTH } = {}) {
+  const walk = (x, d) => {
+    if (d > maxDepth) throw bad("too_deep", "nesting is deeper than " + maxDepth);
+    if (typeof x === "string") {
+      if (LONE.test(x)) throw bad("bad_string", "a string holds a lone surrogate");
+      return;
+    }
+    if (typeof x === "number") {
+      if (!Number.isFinite(x)) throw bad("bad_number", "a number is not finite");
+      if (Number.isInteger(x) && !Number.isSafeInteger(x)) throw bad("bad_number", "an integer beyond 2^53");
+      return;
+    }
+    if (x === null || typeof x === "boolean") return;
+    if (Array.isArray(x)) {
+      for (const y of x) walk(y, d + 1);
+      return;
+    }
+    if (typeof x === "object") {
+      for (const k of Object.keys(x)) {
+        if (LONE.test(k)) throw bad("bad_string", "a key holds a lone surrogate");
+        walk(x[k], d + 1);
+      }
+      return;
+    }
+    throw bad("bad_json", "a value of type " + typeof x + " is not JSON");
+  };
+  walk(v, 0);
+  return v;
+}
+
+// engine/src/engine.mjs
 var ID_RE2 = /^[A-Za-z0-9._:-]{1,200}$/;
-var SUBJECT_RE = /^urn:[a-z0-9][a-z0-9-]{0,31}:[^\s]{1,160}$/i;
+var SUBJECT_RE = /^urn:([a-z0-9][a-z0-9-]{0,31}):([^\s]{1,160})$/i;
+var PERSONAL_NS = /* @__PURE__ */ new Set(["email", "mailto", "mail", "person", "name", "tel", "phone", "msisdn"]);
+var subjectOk = (s) => {
+  const m = typeof s === "string" ? SUBJECT_RE.exec(s) : null;
+  return !!m && !PERSONAL_NS.has(m[1].toLowerCase()) && !m[2].includes("@");
+};
+var has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
+var uuidFrom = (text) => {
+  const h = createHash3("sha256").update(text).digest("hex");
+  return `urn:uuid:${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
+};
 var DID_KEY3 = "did:key:";
 var COMMIT_TYP = "sanad-commit+jws";
 var HOUR = 36e5;
@@ -2021,16 +2273,25 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
   if (!logSigner || !logSigner.did || typeof logSigner.sign !== "function") throw err("bad_config", "logSigner must be { did, kid, sign }");
   const res = resolver ?? createResolver({ store });
   const log = createLog({ store, logId, signer: logSigner, clock });
-  const nowMs = () => clock.now();
+  let hi = 0;
+  const nowMs = () => {
+    const t = clock.now();
+    if (Number.isFinite(t) && t > hi) hi = t;
+    return hi;
+  };
   const nowIso = () => new Date(nowMs()).toISOString();
   const today = () => nowIso().slice(0, 10);
   const getRec = (id) => {
     const a = typeof id === "string" && ID_RE2.test(id) ? store.get("assessments", id) : null;
     if (!a) throw err("assessment_unknown", "no such assessment: " + id, 404);
+    if (Number.isFinite(a.hwm) && a.hwm > hi) hi = a.hwm;
     return a;
   };
-  const save = (a) => store.put("assessments", a.id, a);
-  const revealOpen = (a) => a.invitations.length > 0 && a.invitations.every((i) => a.commits[i.attestationId]) || nowMs() > Date.parse(a.commitBy);
+  const save = (a) => {
+    a.hwm = Math.max(hi, a.hwm ?? 0);
+    store.put("assessments", a.id, a);
+  };
+  const revealOpen = (a) => !!a.revealOpenedAt || Object.keys(a.reveals).length > 0 || a.invitations.length > 0 && a.invitations.every((i) => a.commits[i.attestationId]) || nowMs() > Date.parse(a.commitBy);
   const sigFail = (r) => {
     const e = err("bad_signature", "signature refused: " + r.reason, 401);
     e.reason = r.reason;
@@ -2045,7 +2306,11 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     const { id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, late, state, credentialId } = a;
     return clone3({ id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, removed: a.removed ?? [], commits, reveals, late, state, credentialId: credentialId ?? null, revealOpen: open });
   }
+  let statsMemo = null;
   const finalizedStats = (excludeId) => {
+    if (excludeId === void 0 || excludeId === null) {
+      if (statsMemo) return statsMemo;
+    }
     const records = [];
     for (const a of store.list("assessments")) {
       if (a.state !== "finalized" || a.id === excludeId) continue;
@@ -2054,10 +2319,13 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       const b = c.sanad.bundle;
       records.push({ evidence: b.evidence.map((e) => ({ id: e.id, kind: e.kind })), marks: b.attestations.map((x) => ({ attestor: x.attestor, evidence: x.evidence, level: x.level })) });
     }
-    return attestorStats(records);
+    const out = attestorStats(records);
+    if (excludeId === void 0 || excludeId === null) statsMemo = out;
+    return out;
   };
   const engine = {
     registerTemplate(t) {
+      checkIJson(t);
       assertTemplate(t);
       const hash = templateHash(t);
       const old = store.get("templates", t.id);
@@ -2082,16 +2350,18 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     updateDid(did, version, jws) {
       return res.update(did, version, jws);
     },
-    createAssessment({ templateId, subject, claimedLevel, evidence, commitBy, revealBy, id } = {}) {
+    createAssessment({ templateId, subject, subjectDid, claimedLevel, evidence, commitBy, revealBy, id } = {}) {
       const rec = typeof templateId === "string" && ID_RE2.test(templateId) ? store.get("templates", templateId) : null;
       if (!rec) throw err("template_unknown", "no such template: " + templateId, 404);
       const t = rec.template;
-      if (typeof subject !== "string" || !SUBJECT_RE.test(subject)) throw err("bad_subject", "subject must be a pseudonymous URN such as urn:uuid:<uuid> (up to 200 characters, no spaces); names and contact details do not belong in the engine");
+      if (!subjectOk(subject)) throw err("bad_subject", "subject must be a pseudonymous URN such as urn:uuid:<uuid> (no spaces, no personal namespace such as email, person, name or tel); names and contact details do not belong in the engine. This is a guard rail: the host remains responsible for choosing a non-identifying URN");
+      if (subjectDid !== void 0 && !(typeof subjectDid === "string" && /^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subjectDid) && subjectDid.length <= 200)) throw err("bad_subject", "subjectDid must be a DID");
       if (!Number.isInteger(claimedLevel) || claimedLevel < 0 || claimedLevel > 5) throw err("bad_assessment", "claimedLevel must be an integer from 0 to 5");
       const aid = id ?? "as-" + randomBytes2(8).toString("hex");
       if (typeof aid !== "string" || !ID_RE2.test(aid) || aid.length > 150) throw err("bad_assessment", "id must match " + ID_RE2 + " and be at most 150 characters");
       if (store.get("assessments", aid)) throw err("assessment_exists", "assessment exists: " + aid, 409);
       if (!Array.isArray(evidence)) throw err("bad_evidence", "evidence must be a list");
+      checkIJson(evidence);
       const plan = new Map(t.evidence.map((e) => [e.key, e]));
       const keys = evidence.map((e) => e?.key);
       if (keys.length !== plan.size || new Set(keys).size !== keys.length || !keys.every((k) => plan.has(k))) throw err("bad_evidence", "evidence keys must be exactly " + [...plan.keys()].join(", "));
@@ -2117,6 +2387,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         templateId,
         templateHash: rec.hash,
         subject,
+        ...subjectDid ? { subjectDid } : {},
         claimedLevel,
         evidence: sealed,
         commitBy: new Date(cb).toISOString(),
@@ -2141,7 +2412,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       if (!ev) throw err("bad_evidence", "unknown evidence item: " + evidence);
       if (typeof attestor !== "string" || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(attestor) || attestor.length > 200) throw err("bad_attestor", "attestor must be a DID");
       if (!t.attestors.roles.includes(role)) throw err("bad_role", "role must be one of " + t.attestors.roles.join(", "));
-      if (attestor === a.subject) throw err("subject_as_attestor", "the subject cannot attest their own work");
+      if (a.subjectDid && attestor === a.subjectDid) throw err("subject_as_attestor", "the subject cannot attest their own work");
       const same = a.invitations.filter((i) => i.evidence === ev.id);
       if (same.some((i) => i.attestor === attestor)) throw err("duplicate_attestor", "this attestor is already invited on " + ev.id, 409);
       const seq = (a.seq ?? a.invitations.length) + 1;
@@ -2173,12 +2444,13 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       const inv2 = a.invitations.find((i) => i.attestationId === attestationId);
       if (!inv2) throw err("not_invited", "no invitation " + attestationId, 403);
       if (a.commits[attestationId]) throw err("already_committed", "a commit for " + attestationId + " exists", 409);
-      if (nowMs() > Date.parse(a.commitBy)) throw err("commit_closed", "the commit phase ended at " + a.commitBy, 409);
+      if (a.revealOpenedAt || Object.keys(a.reveals).length > 0 || nowMs() > Date.parse(a.commitBy)) throw err("commit_closed", "the commit phase is over (deadline " + a.commitBy + " or reveals have begun)", 409);
       checkCommit({ payload, invitation: inv2, assessment: a });
       const r = res.verifyStatement({ jws, payload, typ: COMMIT_TYP, signer: inv2.attestor, date: today() });
       if (!r.ok) throw sigFail(r);
       const entry = log.append({ kind: "commit", ref: hashOf(payload) });
       a.commits[attestationId] = { commit: payload.commit, payload: clone3(payload), jws, at: nowIso(), logIndex: entry.index };
+      if (a.invitations.every((i) => a.commits[i.attestationId])) a.revealOpenedAt = nowIso();
       save(a);
       return { committed: Object.keys(a.commits).length, of: a.invitations.length };
     },
@@ -2192,6 +2464,9 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       if (!c) throw err("not_committed", "no commit for " + attestationId, 409);
       if (a.reveals[attestationId]) throw err("already_revealed", attestationId + " is already revealed", 409);
       if (nowMs() > Date.parse(a.revealBy)) {
+        if (statement === null || typeof statement !== "object" || statement.id !== attestationId || statement.attestor !== inv2.attestor || !isIsoDate(statement.date)) throw err("bad_statement", "a late reveal is recorded only for a statement of the invited attestor");
+        const lr = res.verifyStatement({ jws, payload: statement, typ: ATTESTATION_TYP, signer: inv2.attestor, date: statement.date });
+        if (!lr.ok) throw sigFail(lr);
         if (!a.late.includes(attestationId)) {
           a.late.push(attestationId);
           a.late.sort();
@@ -2216,10 +2491,16 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       const r = res.verifyStatement({ jws, payload: statement, typ: ATTESTATION_TYP, signer: inv2.attestor, date: statement.date });
       if (!r.ok) throw sigFail(r);
       a.reveals[attestationId] = { statement: clone3(statement), jws, at: nowIso() };
+      a.revealOpenedAt ??= nowIso();
       save(a);
       return { revealed: Object.keys(a.reveals).length, of: Object.keys(a.commits).length };
     },
-    finalize(assessmentId) {
+    /**
+     * Seals the credential. The template's minimum is enforced: every evidence item that needs human attestors (kind other than auto) must have at least
+     * `attestors.min` revealed attestors, and a live-sitting template needs revealed marks on sitting evidence. `allowShortfall: true` is the operator's
+     * explicit, recorded override (`process.shortfall`). Retrying after a crash is safe: log leaves are appended once and the credential id is derived.
+     */
+    finalize(assessmentId, { allowShortfall = false } = {}) {
       const a = getRec(assessmentId);
       if (a.state !== "open") throw err("state", "the assessment is already finalized", 409);
       const t = engine.getTemplate(a.templateId);
@@ -2229,12 +2510,16 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       const missing = committed.filter((k) => !a.reveals[k]);
       const notCommitted = a.invitations.map((i) => i.attestationId).filter((k) => !a.commits[k]).sort();
       const revealed = committed.filter((k) => a.reveals[k]);
-      const logIdx = committed.map((k) => a.commits[k].logIndex);
-      for (const k of missing) logIdx.push(log.append({ kind: "missing-reveal", ref: a.commits[k].commit }).index);
+      const shortfall = [];
+      const byEv = new Map(a.evidence.map((e) => [e.id, /* @__PURE__ */ new Set()]));
+      for (const k of revealed) byEv.get(a.reveals[k].statement.evidence)?.add(a.reveals[k].statement.attestor);
+      for (const e of a.evidence) if (e.kind !== "auto" && byEv.get(e.id).size < t.attestors.min) shortfall.push(`${e.id}: ${byEv.get(e.id).size} revealed attestor(s), template minimum ${t.attestors.min}`);
+      if (t.liveSitting && !a.evidence.some((e) => e.kind === "sitting" && byEv.get(e.id).size > 0)) shortfall.push("liveSitting: no sitting evidence has a revealed attestor");
+      if (shortfall.length && !allowShortfall) throw err("below_template_minimum", "the template requirements are not met (" + shortfall.join("; ") + "); pass allowShortfall to finalize anyway, which is recorded in the credential", 409);
       const attestors = [...new Set(revealed.map((k) => a.reveals[k].statement.attestor))];
-      const hist = finalizedStats(a.id);
+      const hist = finalizedStats();
       const stats = {};
-      for (const d of attestors) stats[d] = hist[d] ?? { sittings: 0, agreement: 0 };
+      for (const d of attestors) stats[d] = has(hist, d) ? hist[d] : { sittings: 0, agreement: 0 };
       const bundle = sealBundle({
         skill: t.skill.id,
         claimedLevel: a.claimedLevel,
@@ -2243,9 +2528,11 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         attestations: revealed.map((k) => ({ statement: a.reveals[k].statement, signature: a.reveals[k].jws })),
         attestors: stats
       });
-      for (const x of bundle.attestations) logIdx.push(log.append({ kind: "attestation", ref: x.hash }).index);
       const bundleHash = bundleHashOf(bundle);
-      logIdx.push(log.append({ kind: "bundle", ref: bundleHash }).index);
+      const logIdx = committed.map((k) => a.commits[k].logIndex);
+      for (const k of missing) logIdx.push(log.appendOnce({ kind: "missing-reveal", ref: a.commits[k].commit }).index);
+      for (const x of bundle.attestations) logIdx.push(log.appendOnce({ kind: "attestation", ref: x.hash }).index);
+      logIdx.push(log.appendOnce({ kind: "bundle", ref: bundleHash }).index);
       const cp = log.checkpoint();
       const idx = [...new Set(logIdx)].sort((x, y) => x - y);
       const embedded = {
@@ -2256,7 +2543,16 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         checkpoint: cp
       };
       const dids = [.../* @__PURE__ */ new Set([issuer.did, logSigner.did, ...attestors])].filter((d) => !d.startsWith(DID_KEY3)).map((d) => res.get(d)).filter(Boolean);
-      const process2 = { invited: a.invitations.length, committed: committed.length, revealed: revealed.length, missing, late: [...a.late], notCommitted, ...(a.removed ?? []).length ? { removed: a.removed.map((r) => r.attestationId).sort() } : {} };
+      const process2 = {
+        invited: a.invitations.length,
+        committed: committed.length,
+        revealed: revealed.length,
+        missing,
+        late: [...a.late],
+        notCommitted,
+        ...(a.removed ?? []).length ? { removed: a.removed.map((r) => r.attestationId).sort() } : {},
+        ...shortfall.length ? { shortfall } : {}
+      };
       const doc = buildCredential({
         bundle,
         issuer,
@@ -2266,13 +2562,15 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         policy: t.policy,
         log: embedded,
         dids,
-        now: nowMs()
+        now: nowMs(),
+        id: uuidFrom(a.id + ":" + bundleHash)
       });
       store.put("credentials", doc.id, doc);
       a.state = "finalized";
       a.credentialId = doc.id;
       a.finalizedAt = nowIso();
       save(a);
+      statsMemo = null;
       return clone3(doc);
     },
     getAssessment(id, { view = "public" } = {}) {
@@ -2288,11 +2586,20 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       return store.list("assessments").map((a) => ({ id: a.id, templateId: a.templateId, subject: a.subject, state: a.state, credentialId: a.credentialId ?? null, createdAt: a.createdAt }));
     },
     verifyCredential(doc, opts = {}) {
-      return verifyCredential(doc, { ...opts, resolver: opts.resolver ?? res, trustedIssuers: opts.trustedIssuers ?? [issuer.did], trustedLogKeys: opts.trustedLogKeys ?? [logSigner.did] });
+      let template = opts.template;
+      if (template === void 0) {
+        try {
+          const tid = doc?.sanad?.template?.id;
+          const rec = typeof tid === "string" && ID_RE2.test(tid) ? store.get("templates", tid) : null;
+          if (rec && rec.hash === doc.sanad.template.hash) template = rec.template;
+        } catch {
+        }
+      }
+      return verifyCredential(doc, { ...opts, resolver: opts.resolver ?? res, trustedIssuers: opts.trustedIssuers ?? [issuer.did], trustedLogKeys: opts.trustedLogKeys ?? [logSigner.did], trustedLogIds: opts.trustedLogIds ?? [logId], ...template ? { template } : {} });
     },
     stats(did) {
       const all = finalizedStats(null);
-      return did === void 0 ? all : all[did] ?? { sittings: 0, agreement: 0 };
+      return did === void 0 ? all : typeof did === "string" && has(all, did) ? all[did] : { sittings: 0, agreement: 0 };
     },
     log,
     resolver: res,
@@ -2310,11 +2617,13 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       const base = policy ? { ...policy } : policyFromTemplate(t, today());
       delete base.id;
       const pol = { ...base, asOf: policy?.asOf ?? today() };
+      const pp = validatePolicy(pol);
+      if (pp.length) throw err("bad_policy", "policy refused: " + pp.join("; "));
       const revealed = Object.keys(a.reveals).sort();
-      const hist = finalizedStats(a.id), stats = {};
+      const hist = finalizedStats(), stats = {};
       for (const k of revealed) {
         const d = a.reveals[k].statement.attestor;
-        stats[d] = hist[d] ?? { sittings: 0, agreement: 0 };
+        stats[d] = has(hist, d) ? hist[d] : { sittings: 0, agreement: 0 };
       }
       const bundle = sealBundle({
         skill: t.skill.id,
@@ -2395,7 +2704,7 @@ function createDemoAttestor(name, seed) {
 
 // engine/src/http.mjs
 import { createServer } from "node:http";
-import { createHash as createHash3, timingSafeEqual } from "node:crypto";
+import { createHash as createHash4, timingSafeEqual } from "node:crypto";
 import { readFileSync as readFileSync2 } from "node:fs";
 import { dirname, join as join2 } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -2406,8 +2715,9 @@ var FILES = { "/": ["index.html", "text/html; charset=utf-8"], "/app.js": ["app.
 var CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 var SECURITY = { "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "cache-control": "no-store" };
 var MAX_ENTRIES = 1e3;
+var DRAIN_LIMIT = 1024 * 1024;
 var err2 = (code, message, status = 400) => new EngineError(code, message, status);
-var sha2 = (s) => createHash3("sha256").update(s).digest();
+var sha2 = (s) => createHash4("sha256").update(s).digest();
 var isObj5 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -2417,8 +2727,11 @@ function readBody(req) {
     let n = 0;
     let dead = false;
     req.on("data", (c) => {
-      if (dead) return;
       n += c.length;
+      if (dead) {
+        if (n > BODY_LIMIT + DRAIN_LIMIT) req.destroy();
+        return;
+      }
       if (n > BODY_LIMIT) {
         dead = true;
         reject(err2("body_too_large", "the body is larger than " + BODY_LIMIT + " bytes", 413));
@@ -2428,12 +2741,29 @@ function readBody(req) {
     });
     req.on("end", () => {
       if (dead) return;
+      let text;
       try {
-        const v = JSON.parse(Buffer.concat(chunks).toString("utf8"));
-        resolve(v);
+        text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
       } catch {
-        reject(err2("bad_json", "the body is not valid JSON"));
+        return reject(err2("bad_json", "the body is not valid UTF-8"));
       }
+      try {
+        scanJsonText(text);
+      } catch (e) {
+        return reject(e);
+      }
+      let v;
+      try {
+        v = JSON.parse(text);
+      } catch {
+        return reject(err2("bad_json", "the body is not valid JSON"));
+      }
+      try {
+        checkIJson(v);
+      } catch (e) {
+        return reject(e);
+      }
+      resolve(v);
     });
     req.on("error", () => {
       if (!dead) {
@@ -2449,7 +2779,7 @@ var intParam = (q, name, def) => {
   if (!/^\d{1,9}$/.test(v)) throw err2("bad_query", name + " must be a non-negative integer");
   return Number(v);
 };
-function createHttpServer({ engine, operatorToken, serveStatic = true } = {}) {
+function createHttpServer({ engine, operatorToken, serveStatic = true, onError = (m) => process.stderr.write(m + "\n") } = {}) {
   if (!engine) throw err2("bad_config", "an engine is required");
   if (typeof operatorToken !== "string" || operatorToken.length < 16) throw err2("bad_config", "operatorToken must be a string of at least 16 characters");
   const tokenHash = sha2(operatorToken);
@@ -2491,25 +2821,41 @@ function createHttpServer({ engine, operatorToken, serveStatic = true } = {}) {
   route("POST", "/v1/assessments/:id/invitations/:att/remove", ({ p, body }) => engine.removeInvitation(p.id, p.att, { reason: isObj5(body) ? body.reason : void 0 }), true);
   route("POST", "/v1/assessments/:id/commit", ({ p, body }) => engine.commit(p.id, body));
   route("POST", "/v1/assessments/:id/reveal", ({ p, body }) => engine.reveal(p.id, body));
-  route("POST", "/v1/assessments/:id/finalize", ({ p }) => engine.finalize(p.id), true);
+  route("POST", "/v1/assessments/:id/finalize", ({ p, body }) => engine.finalize(p.id, { allowShortfall: isObj5(body) && body.allowShortfall === true }), true);
   route("GET", "/v1/credentials/:id", ({ p }) => engine.getCredential(p.id));
   route("POST", "/v1/verify", ({ body }) => {
-    if (!isObj5(body) || !("credential" in body)) throw err2("bad_request", "the body must be { credential, policy?, trustedIssuers?, trustedLogKeys?, asOf? }");
+    if (!isObj5(body) || !("credential" in body)) throw err2("bad_request", "the body must be { credential, policy | useRecommendedPolicy, asOf?, trustedIssuers?, trustedLogKeys?, ... } (DESIGN section 8)");
+    const c = body.credential, b = c?.sanad?.bundle, l = c?.sanad?.log;
+    if (Array.isArray(b?.attestations) && b.attestations.length > VERIFY_LIMITS.attestations || Array.isArray(b?.evidence) && b.evidence.length > VERIFY_LIMITS.evidence || Array.isArray(l?.entries) && l.entries.length > VERIFY_LIMITS.logEntries || Array.isArray(c?.sanad?.dids) && c.sanad.dids.length > VERIFY_LIMITS.dids) throw err2("too_large", "the credential has more attestations, evidence items, log entries or DID histories than one verification call accepts");
     const opts = {};
     if (body.policy !== void 0) {
       if (!isObj5(body.policy)) throw err2("bad_request", "policy must be an object");
       opts.policy = body.policy;
     }
-    for (const k of ["trustedIssuers", "trustedLogKeys"]) {
+    for (const k of ["trustedIssuers", "trustedLogKeys", "trustedLogIds", "allowedAttestors"]) {
       if (body[k] === void 0) continue;
       if (!Array.isArray(body[k]) || !body[k].every((x) => typeof x === "string")) throw err2("bad_request", k + " must be a list of strings");
       opts[k] = body[k];
+    }
+    for (const k of ["useRecommendedPolicy", "useVerifierClock", "allowUnpinned", "allowIssuerStatistics", "allowEmbeddedDids"]) {
+      if (body[k] === void 0) continue;
+      if (typeof body[k] !== "boolean") throw err2("bad_request", k + " must be true or false");
+      opts[k] = body[k];
+    }
+    for (const k of ["pinnedKeys", "attestorStats"]) {
+      if (body[k] === void 0) continue;
+      if (!isObj5(body[k])) throw err2("bad_request", k + " must be an object");
+      opts[k] = body[k];
+    }
+    if (body.trustedDidHistories !== void 0) {
+      if (!Array.isArray(body.trustedDidHistories)) throw err2("bad_request", "trustedDidHistories must be a list");
+      opts.trustedDidHistories = body.trustedDidHistories;
     }
     if (body.asOf !== void 0) {
       if (typeof body.asOf !== "string") throw err2("bad_request", "asOf must be a string");
       opts.asOf = body.asOf;
     }
-    return engine.verifyCredential(body.credential, opts);
+    return engine.verifyCredential(c, opts);
   });
   route("GET", "/v1/log/checkpoint", () => engine.log.checkpoint());
   route("GET", "/v1/log/entries", ({ q }) => {
@@ -2583,8 +2929,14 @@ function createHttpServer({ engine, operatorToken, serveStatic = true } = {}) {
       const status = known ? e.status : 500;
       const payload = known ? { error: e.code, message: e.message } : { error: "internal", message: "internal error" };
       if (known && e.reason) payload.reason = e.reason;
-      if (!known) process.emitWarning?.("sanad-engine internal error: " + (e?.stack ?? e));
-      if (!res.headersSent) send(res, status, payload, { "content-type": "application/json; charset=utf-8" });
+      if (!known) {
+        try {
+          onError("sanad-engine internal error: " + (e?.name ?? "Error") + ": " + String(e?.message ?? e).slice(0, 200));
+        } catch {
+        }
+      }
+      if (status === 413) res.once("finish", () => req.destroy());
+      if (!res.headersSent) send(res, status, payload, { "content-type": "application/json; charset=utf-8", ...status === 413 ? { connection: "close" } : {} });
       else res.end();
     }
   });
@@ -2596,8 +2948,11 @@ export {
   CSP,
   DID_UPDATE_TYP,
   EngineError,
+  MAX_DEPTH,
   NONCE_RE,
+  NOTICE,
   STATIC_DIR,
+  VERIFY_LIMITS,
   assertTemplate,
   attestationStatement,
   attestorStats,
@@ -2607,6 +2962,7 @@ export {
   buildCredential,
   bundleHashOf,
   checkCommit,
+  checkIJson,
   checkReveal,
   commitFor,
   commitStatement,
@@ -2649,10 +3005,12 @@ export {
   prepareReveal,
   publicKeyFromDidKey,
   publicKeyOf,
+  scanJsonText,
   sealBundle,
   signJws,
   sqliteAvailable,
   templateHash,
+  validatePolicy,
   validateTemplate,
   verifyCheckpoint,
   verifyConsistency,

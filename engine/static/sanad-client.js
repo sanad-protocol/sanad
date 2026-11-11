@@ -25,7 +25,8 @@ function base58(bytes) {
 
 /** A fresh attestor identity: { did, kid, sign(typ, payload) -> detached JWS }. */
 export async function newAttestor() {
-  const pair = await crypto.subtle.generateKey('Ed25519', true, ['sign', 'verify']);
+  // non-extractable: the page can sign with the key but no script can read it out (the public key stays exportable, as WebCrypto always allows)
+  const pair = await crypto.subtle.generateKey('Ed25519', false, ['sign', 'verify']);
   return attestorFromKeyPair(pair);
 }
 export async function attestorFromKeyPair({ privateKey, publicKey }) {
@@ -38,7 +39,7 @@ export async function attestorFromKeyPair({ privateKey, publicKey }) {
     const sig = new Uint8Array(await crypto.subtle.sign('Ed25519', privateKey, enc.encode(input)));
     return header + '..' + b64u(sig);
   };
-  return { did, kid, sign };
+  return { did, kid, sign, privateKeyExtractable: privateKey.extractable };
 }
 
 export const newNonce = () => b64u(crypto.getRandomValues(new Uint8Array(16)));

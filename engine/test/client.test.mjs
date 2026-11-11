@@ -24,7 +24,7 @@ describe('static/sanad-client.js (the browser attestor)', () => {
     engine.reveal('as-1', await prepareReveal({ attestor: b, assessment: view(), attestationId: i2.attestationId, secret: cb.secret, date: '2026-03-01' }));
     clock.advance(1000);
     const doc = engine.finalize('as-1');
-    const r = engine.verifyCredential(doc);
+    const r = engine.verifyCredential(doc, { useRecommendedPolicy: true });
     expect(r.ok).toBe(true); expect(r.recognition.level).toBe(3);
   });
   it('refuses an invitation that belongs to someone else', async () => {

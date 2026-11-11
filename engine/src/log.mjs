@@ -147,6 +147,8 @@ export function createLog({ store, stream = 'log', logId, signer = null, clock =
   if (typeof logId !== 'string' || !logId) throw new EngineError('bad_config', 'logId is required');
   const stored = store.read(stream);
   const hashes = stored.map((e) => e?.leafHash); // cache of leaf hashes
+  const byLeaf = new Map(); // `${kind}:${ref}` -> first index, so that a retried operation does not append the same leaf twice
+  stored.forEach((e, i) => { try { const l = JSON.parse(e.leaf); const k = l.kind + ':' + l.ref; if (!byLeaf.has(k)) byLeaf.set(k, i); } catch { /* damaged entry: caught by verifyChain */ } });
   let lastHash = stored.length ? stored[stored.length - 1]?.hash : 'GENESIS';
   const size = () => hashes.length;
   const sz = (s) => { const v = s === undefined ? size() : s; if (!Number.isInteger(v) || v < 0 || v > size()) throw new EngineError('bad_range', 'size outside log'); return v; };
@@ -167,7 +169,14 @@ export function createLog({ store, stream = 'log', logId, signer = null, clock =
       const at = store.append(stream, entry);
       if (at !== entry.index) throw new EngineError('log_conflict', 'stream index does not match the log', 500);
       hashes.push(lh); lastHash = entry.hash;
+      const key = kind + ':' + ref; if (!byLeaf.has(key)) byLeaf.set(key, entry.index);
       return { index: entry.index, leaf, leafHash: lh };
+    },
+    /** Appends the leaf unless a leaf of the same kind and ref is already in the log (idempotent retry); returns { index, leaf, leafHash, existed }. */
+    appendOnce({ kind, ref } = {}) {
+      const at = byLeaf.get(kind + ':' + ref);
+      if (at !== undefined) { const e = store.read(stream, at, at + 1)[0]; return { index: at, leaf: e.leaf, leafHash: e.leafHash, existed: true }; }
+      return { ...this.append({ kind, ref }), existed: false };
     },
     size,
     root: (s) => rootOf(s),
