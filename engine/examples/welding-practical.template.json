@@ -1,0 +1,24 @@
+{
+  "id": "welding-practical-v1",
+  "version": 1,
+  "title": "Practical welding assessment",
+  "description": "A live practical and a recorded test-rig result. A host that grades 1 to 6 maps its native grades through levelMap; the native mark can be bound into the nonce.",
+  "skill": { "id": "welding.butt-joint", "title": "Butt joint in steel plate" },
+  "levels": [
+    { "level": 0, "label": "Unsafe or no weld" },
+    { "level": 1, "label": "Needs close supervision" },
+    { "level": 2, "label": "Sound weld with rework" },
+    { "level": 3, "label": "Sound weld, first attempt" },
+    { "level": 4, "label": "Sound weld at speed" },
+    { "level": 5, "label": "Qualified to instruct" }
+  ],
+  "levelMap": { "native-1": 0, "native-2": 1, "native-3": 2, "native-4": 3, "native-5": 4, "native-6": 5 },
+  "evidence": [
+    { "key": "E1", "kind": "sitting", "summary": "Live practical, observed", "live": true, "minutes": 60 },
+    { "key": "E2", "kind": "auto", "summary": "Bend-test result from the rig (hash of the record in the body)" }
+  ],
+  "attestors": { "min": 3, "max": 3, "roles": ["examiner", "observer"] },
+  "liveSitting": true,
+  "deadlines": { "commitHours": 12, "revealHours": 24 },
+  "policy": { "id": "welding-strict-1", "minAttestors": 3, "requireLive": true, "halfLifeMonths": 24, "minAttestorSittings": 0, "minAgreement": 0, "maxInferenceDepth": 0, "inferenceDecay": 0.8 }
+}

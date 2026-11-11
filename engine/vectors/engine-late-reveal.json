@@ -1,0 +1,208 @@
+{
+  "id": "engine-late-reveal",
+  "description": "B commits but reveals after revealBy: refused as late and recorded; the credential holds A only and the verifier under minAttestors 2 gets a provisional result.",
+  "setup": {
+    "clock": "2026-03-01T09:00:00.000Z",
+    "template": {
+      "id": "maths-oral-v1",
+      "version": 1,
+      "title": "Maths oral",
+      "skill": {
+        "id": "analysis.limits",
+        "title": "Limits"
+      },
+      "levels": [
+        {
+          "level": 0,
+          "label": "L0"
+        },
+        {
+          "level": 1,
+          "label": "L1"
+        },
+        {
+          "level": 2,
+          "label": "L2"
+        },
+        {
+          "level": 3,
+          "label": "L3"
+        },
+        {
+          "level": 4,
+          "label": "L4"
+        },
+        {
+          "level": 5,
+          "label": "L5"
+        }
+      ],
+      "evidence": [
+        {
+          "key": "E1",
+          "kind": "sitting",
+          "summary": "Oral sitting"
+        }
+      ],
+      "attestors": {
+        "min": 2,
+        "max": 3,
+        "roles": [
+          "examiner"
+        ]
+      },
+      "liveSitting": true,
+      "deadlines": {
+        "commitHours": 24,
+        "revealHours": 48
+      },
+      "policy": {
+        "id": "p1",
+        "minAttestors": 2,
+        "requireLive": true,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 2,
+        "inferenceDecay": 0.8
+      }
+    },
+    "assessment": {
+      "id": "as-1",
+      "templateId": "maths-oral-v1",
+      "subject": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "claimedLevel": 4,
+      "evidence": [
+        {
+          "key": "E1",
+          "date": "2026-03-01",
+          "summary": "Oral sitting of 40 minutes",
+          "body": {
+            "minutes": 40
+          }
+        }
+      ]
+    },
+    "people": {
+      "A": {
+        "seed": 10
+      },
+      "B": {
+        "seed": 11
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "invite",
+      "who": "A",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a01"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "B",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a02"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "A",
+      "att": "as-1.a01",
+      "level": 4,
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "committed": 1,
+        "of": 2
+      }
+    },
+    {
+      "op": "commit",
+      "who": "B",
+      "att": "as-1.a02",
+      "level": 3,
+      "nonce": "bbbbbbbbbbbbbbbbbbbbbb",
+      "expect": {
+        "committed": 2,
+        "of": 2
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "A",
+      "att": "as-1.a01",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 1,
+        "of": 2
+      }
+    },
+    {
+      "op": "advance",
+      "hours": 80,
+      "expect": {
+        "advancedHours": 80
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "B",
+      "att": "as-1.a02",
+      "date": "2026-03-04",
+      "expect": {
+        "error": "reveal_late"
+      }
+    },
+    {
+      "op": "finalize",
+      "expect": {
+        "bundleHash": "5140fb4ccc6be7fb01bd05a7c237ce430d4f8e7030da992376a13e24b11a033a",
+        "process": {
+          "invited": 2,
+          "committed": 2,
+          "revealed": 1,
+          "missing": [
+            "as-1.a02"
+          ],
+          "late": [
+            "as-1.a02"
+          ],
+          "notCommitted": []
+        },
+        "checksPass": true,
+        "recognition": {
+          "status": "provisional",
+          "level": 0,
+          "confidence": 0.598
+        },
+        "attestorStats": {
+          "did:key:z6Mkj1MDZKcfx9AX5CeXHdysiGkRLzBbALyFuShD6wNeY1E3": {
+            "sittings": 0,
+            "agreement": 0
+          }
+        },
+        "logSize": 5,
+        "logRoot": "5aa7108966626fbc0d55d3c93986e8b3507d90dd0c7bbc3f579472a62765e45c"
+      }
+    },
+    {
+      "op": "verify",
+      "expect": {
+        "ok": true,
+        "failed": [],
+        "recognition": {
+          "status": "provisional",
+          "level": 0,
+          "confidence": 0.598
+        },
+        "dropped": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "id": "maths-oral-v1",
+  "version": 1,
+  "title": "Oral examination in single-variable analysis",
+  "description": "A live oral sitting of about forty minutes marked blind by two or three examiners.",
+  "skill": { "id": "analysis.limits", "title": "Limits and continuity" },
+  "levels": [
+    { "level": 0, "label": "No evidence of the skill" },
+    { "level": 1, "label": "Recalls definitions" },
+    { "level": 2, "label": "Applies standard methods with help" },
+    { "level": 3, "label": "Solves routine problems unaided" },
+    { "level": 4, "label": "Proves and explains unfamiliar results" },
+    { "level": 5, "label": "Teaches and extends the material" }
+  ],
+  "rubric": [
+    { "id": "definition", "criterion": "States and uses the epsilon-delta definition", "descriptors": { "1": "Recites it", "3": "Uses it on a routine limit", "5": "Adapts it to a new setting" } },
+    { "id": "proof", "criterion": "Writes a correct argument", "descriptors": { "2": "Argument with gaps", "4": "Complete argument" } }
+  ],
+  "evidence": [{ "key": "E1", "kind": "sitting", "summary": "Live oral sitting", "live": true, "minutes": 40 }],
+  "attestors": { "min": 2, "max": 3, "roles": ["examiner"] },
+  "liveSitting": true,
+  "deadlines": { "commitHours": 24, "revealHours": 48 },
+  "policy": { "id": "maths-oral-strict-1", "minAttestors": 2, "requireLive": true, "halfLifeMonths": 36, "minAttestorSittings": 0, "minAgreement": 0, "maxInferenceDepth": 2, "inferenceDecay": 0.8 }
+}

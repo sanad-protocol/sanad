@@ -1,0 +1,14 @@
+:root { --bg: #fff; --fg: #1a1a1a; --muted: #555; --line: #c8c8c8; --ok: #0a6b2d; --bad: #a3131f; --code: #f3f3f3; }
+@media (prefers-color-scheme: dark) { :root { --bg: #121212; --fg: #eaeaea; --muted: #aaa; --line: #444; --ok: #6fd38d; --bad: #ff8a93; --code: #1e1e1e; } }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.5 system-ui, sans-serif; }
+main { max-width: 46rem; margin: 0 auto; padding: 1rem; }
+h1, h2 { line-height: 1.2; }
+section { border-top: 1px solid var(--line); margin-top: 1.5rem; padding-top: .5rem; }
+.note { color: var(--muted); }
+label { display: block; margin-top: .75rem; font-weight: 600; }
+textarea, input { width: 100%; box-sizing: border-box; font: inherit; padding: .4rem; background: var(--bg); color: var(--fg); border: 1px solid var(--line); }
+button { margin-top: .75rem; font: inherit; padding: .5rem 1rem; min-height: 44px; background: var(--fg); color: var(--bg); border: 0; cursor: pointer; }
+pre, code { background: var(--code); }
+pre { padding: .5rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }
+.ok { color: var(--ok); font-weight: 700; }
+.bad { color: var(--bad); font-weight: 700; }

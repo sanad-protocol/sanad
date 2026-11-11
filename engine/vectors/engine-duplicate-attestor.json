@@ -1,0 +1,167 @@
+{
+  "id": "engine-duplicate-attestor",
+  "description": "The same attestor cannot be invited twice on one evidence item, the subject cannot attest, an unknown role is refused, and the template maximum is enforced.",
+  "setup": {
+    "clock": "2026-03-01T09:00:00.000Z",
+    "template": {
+      "id": "maths-oral-v1",
+      "version": 1,
+      "title": "Maths oral",
+      "skill": {
+        "id": "analysis.limits",
+        "title": "Limits"
+      },
+      "levels": [
+        {
+          "level": 0,
+          "label": "L0"
+        },
+        {
+          "level": 1,
+          "label": "L1"
+        },
+        {
+          "level": 2,
+          "label": "L2"
+        },
+        {
+          "level": 3,
+          "label": "L3"
+        },
+        {
+          "level": 4,
+          "label": "L4"
+        },
+        {
+          "level": 5,
+          "label": "L5"
+        }
+      ],
+      "evidence": [
+        {
+          "key": "E1",
+          "kind": "sitting",
+          "summary": "Oral sitting"
+        }
+      ],
+      "attestors": {
+        "min": 2,
+        "max": 3,
+        "roles": [
+          "examiner"
+        ]
+      },
+      "liveSitting": true,
+      "deadlines": {
+        "commitHours": 24,
+        "revealHours": 48
+      },
+      "policy": {
+        "id": "p1",
+        "minAttestors": 2,
+        "requireLive": true,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 2,
+        "inferenceDecay": 0.8
+      }
+    },
+    "assessment": {
+      "id": "as-1",
+      "templateId": "maths-oral-v1",
+      "subject": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "claimedLevel": 4,
+      "evidence": [
+        {
+          "key": "E1",
+          "date": "2026-03-01",
+          "summary": "Oral sitting of 40 minutes",
+          "body": {
+            "minutes": 40
+          }
+        }
+      ]
+    },
+    "people": {
+      "A": {
+        "seed": 10
+      },
+      "B": {
+        "seed": 11
+      },
+      "C": {
+        "seed": 12
+      },
+      "D": {
+        "seed": 13
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "invite",
+      "who": "A",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a01"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "A",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "error": "duplicate_attestor"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "B",
+      "attestorDid": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "error": "bad_attestor"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "B",
+      "role": "judge",
+      "evidence": "E1",
+      "expect": {
+        "error": "bad_role"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "B",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a02"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "C",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a03"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "D",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "error": "too_many_attestors"
+      }
+    }
+  ]
+}

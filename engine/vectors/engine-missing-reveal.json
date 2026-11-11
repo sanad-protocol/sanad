@@ -1,0 +1,240 @@
+{
+  "id": "engine-missing-reveal",
+  "description": "C commits and never reveals: C is listed as missing and a missing-reveal leaf is logged; finalize is refused before the deadline and allowed after it.",
+  "setup": {
+    "clock": "2026-03-01T09:00:00.000Z",
+    "template": {
+      "id": "maths-oral-v1",
+      "version": 1,
+      "title": "Maths oral",
+      "skill": {
+        "id": "analysis.limits",
+        "title": "Limits"
+      },
+      "levels": [
+        {
+          "level": 0,
+          "label": "L0"
+        },
+        {
+          "level": 1,
+          "label": "L1"
+        },
+        {
+          "level": 2,
+          "label": "L2"
+        },
+        {
+          "level": 3,
+          "label": "L3"
+        },
+        {
+          "level": 4,
+          "label": "L4"
+        },
+        {
+          "level": 5,
+          "label": "L5"
+        }
+      ],
+      "evidence": [
+        {
+          "key": "E1",
+          "kind": "sitting",
+          "summary": "Oral sitting"
+        }
+      ],
+      "attestors": {
+        "min": 2,
+        "max": 3,
+        "roles": [
+          "examiner"
+        ]
+      },
+      "liveSitting": true,
+      "deadlines": {
+        "commitHours": 24,
+        "revealHours": 48
+      },
+      "policy": {
+        "id": "p1",
+        "minAttestors": 2,
+        "requireLive": true,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 2,
+        "inferenceDecay": 0.8
+      }
+    },
+    "assessment": {
+      "id": "as-1",
+      "templateId": "maths-oral-v1",
+      "subject": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "claimedLevel": 4,
+      "evidence": [
+        {
+          "key": "E1",
+          "date": "2026-03-01",
+          "summary": "Oral sitting of 40 minutes",
+          "body": {
+            "minutes": 40
+          }
+        }
+      ]
+    },
+    "people": {
+      "A": {
+        "seed": 10
+      },
+      "B": {
+        "seed": 11
+      },
+      "C": {
+        "seed": 12
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "invite",
+      "who": "A",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a01"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "B",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a02"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "C",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a03"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "A",
+      "att": "as-1.a01",
+      "level": 4,
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "committed": 1,
+        "of": 3
+      }
+    },
+    {
+      "op": "commit",
+      "who": "B",
+      "att": "as-1.a02",
+      "level": 4,
+      "nonce": "bbbbbbbbbbbbbbbbbbbbbb",
+      "expect": {
+        "committed": 2,
+        "of": 3
+      }
+    },
+    {
+      "op": "commit",
+      "who": "C",
+      "att": "as-1.a03",
+      "level": 1,
+      "nonce": "cccccccccccccccccccccc",
+      "expect": {
+        "committed": 3,
+        "of": 3
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "A",
+      "att": "as-1.a01",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 1,
+        "of": 3
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "B",
+      "att": "as-1.a02",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 2,
+        "of": 3
+      }
+    },
+    {
+      "op": "finalize",
+      "expect": {
+        "error": "not_ready"
+      }
+    },
+    {
+      "op": "advance",
+      "hours": 100,
+      "expect": {
+        "advancedHours": 100
+      }
+    },
+    {
+      "op": "finalize",
+      "expect": {
+        "bundleHash": "73972cc8d3440becedb38afe9164df1eae9da18ecaa2f868f708d245edfe95a2",
+        "process": {
+          "invited": 3,
+          "committed": 3,
+          "revealed": 2,
+          "missing": [
+            "as-1.a03"
+          ],
+          "late": [],
+          "notCommitted": []
+        },
+        "checksPass": true,
+        "recognition": {
+          "status": "recognised",
+          "level": 4,
+          "confidence": 0.838
+        },
+        "attestorStats": {
+          "did:key:z6Mkj1MDZKcfx9AX5CeXHdysiGkRLzBbALyFuShD6wNeY1E3": {
+            "sittings": 0,
+            "agreement": 0
+          },
+          "did:key:z6MkmNL6xksdEJENGk9Z1qqGsY5njKQdjU1UhnUEUvWyQUVX": {
+            "sittings": 0,
+            "agreement": 0
+          }
+        },
+        "logSize": 7,
+        "logRoot": "e3c944a16c8d8fdd4b6b9ae84278df9870c9f74f4d3a70254479240cc1d1f913"
+      }
+    },
+    {
+      "op": "verify",
+      "expect": {
+        "ok": true,
+        "failed": [],
+        "recognition": {
+          "status": "recognised",
+          "level": 4,
+          "confidence": 0.838
+        },
+        "dropped": []
+      }
+    }
+  ]
+}

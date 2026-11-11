@@ -1,0 +1,252 @@
+{
+  "id": "engine-commit-reveal",
+  "description": "Honest run with two examiners. Also checks that a reveal before all commits is refused, that a commit cannot be copied from another attestor or sent twice, and that the credential verifies with every check true.",
+  "setup": {
+    "clock": "2026-03-01T09:00:00.000Z",
+    "template": {
+      "id": "maths-oral-v1",
+      "version": 1,
+      "title": "Maths oral",
+      "skill": {
+        "id": "analysis.limits",
+        "title": "Limits"
+      },
+      "levels": [
+        {
+          "level": 0,
+          "label": "L0"
+        },
+        {
+          "level": 1,
+          "label": "L1"
+        },
+        {
+          "level": 2,
+          "label": "L2"
+        },
+        {
+          "level": 3,
+          "label": "L3"
+        },
+        {
+          "level": 4,
+          "label": "L4"
+        },
+        {
+          "level": 5,
+          "label": "L5"
+        }
+      ],
+      "evidence": [
+        {
+          "key": "E1",
+          "kind": "sitting",
+          "summary": "Oral sitting"
+        }
+      ],
+      "attestors": {
+        "min": 2,
+        "max": 3,
+        "roles": [
+          "examiner"
+        ]
+      },
+      "liveSitting": true,
+      "deadlines": {
+        "commitHours": 24,
+        "revealHours": 48
+      },
+      "policy": {
+        "id": "p1",
+        "minAttestors": 2,
+        "requireLive": true,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 2,
+        "inferenceDecay": 0.8
+      }
+    },
+    "assessment": {
+      "id": "as-1",
+      "templateId": "maths-oral-v1",
+      "subject": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "claimedLevel": 4,
+      "evidence": [
+        {
+          "key": "E1",
+          "date": "2026-03-01",
+          "summary": "Oral sitting of 40 minutes",
+          "body": {
+            "minutes": 40
+          }
+        }
+      ]
+    },
+    "people": {
+      "A": {
+        "seed": 10
+      },
+      "B": {
+        "seed": 11
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "invite",
+      "who": "A",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a01"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "B",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a02"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "A",
+      "att": "as-1.a01",
+      "level": 4,
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "committed": 1,
+        "of": 2
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "A",
+      "att": "as-1.a01",
+      "date": "2026-03-01",
+      "expect": {
+        "error": "reveal_not_open"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "B",
+      "att": "as-1.a02",
+      "copyFrom": "as-1.a01",
+      "expect": {
+        "error": "commit_mismatch_invitation"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "A",
+      "att": "as-1.a01",
+      "level": 4,
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "error": "already_committed"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "B",
+      "att": "as-1.a02",
+      "level": 3,
+      "nonce": "bbbbbbbbbbbbbbbbbbbbbb",
+      "expect": {
+        "committed": 2,
+        "of": 2
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "A",
+      "att": "as-1.a01",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 1,
+        "of": 2
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "B",
+      "att": "as-1.a02",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 2,
+        "of": 2
+      }
+    },
+    {
+      "op": "finalize",
+      "expect": {
+        "bundleHash": "c72d8284410bfe67d6a8671afc2cfb58b25e4f526cc4e73a291e55e28eeb49dd",
+        "process": {
+          "invited": 2,
+          "committed": 2,
+          "revealed": 2,
+          "missing": [],
+          "late": [],
+          "notCommitted": []
+        },
+        "checksPass": true,
+        "recognition": {
+          "status": "recognised",
+          "level": 3,
+          "confidence": 0.84
+        },
+        "attestorStats": {
+          "did:key:z6Mkj1MDZKcfx9AX5CeXHdysiGkRLzBbALyFuShD6wNeY1E3": {
+            "sittings": 0,
+            "agreement": 0
+          },
+          "did:key:z6MkmNL6xksdEJENGk9Z1qqGsY5njKQdjU1UhnUEUvWyQUVX": {
+            "sittings": 0,
+            "agreement": 0
+          }
+        },
+        "logSize": 5,
+        "logRoot": "f6812aceedac307113534903d5956070ee6e1686ac1393794149fcae83dd18ec"
+      }
+    },
+    {
+      "op": "verify",
+      "expect": {
+        "ok": true,
+        "failed": [],
+        "recognition": {
+          "status": "recognised",
+          "level": 3,
+          "confidence": 0.84
+        },
+        "dropped": []
+      }
+    },
+    {
+      "op": "verify",
+      "policy": {
+        "minAttestors": 3,
+        "requireLive": true,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 2,
+        "inferenceDecay": 0.8
+      },
+      "expect": {
+        "ok": true,
+        "failed": [],
+        "recognition": {
+          "status": "provisional",
+          "level": 0,
+          "confidence": 0.84
+        },
+        "dropped": []
+      }
+    }
+  ]
+}

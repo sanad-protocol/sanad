@@ -1,0 +1,305 @@
+{
+  "id": "engine-key-rotation",
+  "description": "Examiners X and Y hold did:web identities. Y rotates before committing: a commit signed with the revoked #k1 is refused, one signed with #k2 is accepted. X commits under #k1, then rotates with #k1 revoked from 2026-03-03: a reveal dated 2026-03-03 signed with #k1 is refused, a reveal dated 2026-03-02 signed with #k1 is accepted (the key was valid on that date). The credential verifies.",
+  "setup": {
+    "clock": "2026-03-01T09:00:00.000Z",
+    "template": {
+      "id": "maths-oral-v1",
+      "version": 1,
+      "title": "Maths oral",
+      "skill": {
+        "id": "analysis.limits",
+        "title": "Limits"
+      },
+      "levels": [
+        {
+          "level": 0,
+          "label": "L0"
+        },
+        {
+          "level": 1,
+          "label": "L1"
+        },
+        {
+          "level": 2,
+          "label": "L2"
+        },
+        {
+          "level": 3,
+          "label": "L3"
+        },
+        {
+          "level": 4,
+          "label": "L4"
+        },
+        {
+          "level": 5,
+          "label": "L5"
+        }
+      ],
+      "evidence": [
+        {
+          "key": "E1",
+          "kind": "sitting",
+          "summary": "Oral sitting"
+        }
+      ],
+      "attestors": {
+        "min": 2,
+        "max": 3,
+        "roles": [
+          "examiner"
+        ]
+      },
+      "liveSitting": true,
+      "deadlines": {
+        "commitHours": 24,
+        "revealHours": 48
+      },
+      "policy": {
+        "id": "p1",
+        "minAttestors": 2,
+        "requireLive": true,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 2,
+        "inferenceDecay": 0.8
+      }
+    },
+    "assessment": {
+      "id": "as-1",
+      "templateId": "maths-oral-v1",
+      "subject": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "claimedLevel": 4,
+      "evidence": [
+        {
+          "key": "E1",
+          "date": "2026-03-01",
+          "summary": "Oral sitting of 40 minutes",
+          "body": {
+            "minutes": 40
+          }
+        }
+      ]
+    },
+    "people": {
+      "A": {
+        "seed": 10
+      },
+      "X": {
+        "seed": 20,
+        "did": "did:web:x.example"
+      },
+      "Y": {
+        "seed": 22,
+        "did": "did:web:y.example"
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "registerDid",
+      "who": "X",
+      "validFrom": "2026-01-01",
+      "expect": {
+        "registered": "did:web:x.example"
+      }
+    },
+    {
+      "op": "registerDid",
+      "who": "Y",
+      "validFrom": "2026-01-01",
+      "expect": {
+        "registered": "did:web:y.example"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "A",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a01"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "X",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a02"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "Y",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a03"
+      }
+    },
+    {
+      "op": "rotateDid",
+      "who": "Y",
+      "newSeed": 23,
+      "newName": "Y2",
+      "validFrom": "2026-03-01",
+      "revokeFrom": "2026-03-01",
+      "expect": {
+        "rotated": "did:web:y.example"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "Y",
+      "att": "as-1.a03",
+      "level": 3,
+      "nonce": "yyyyyyyyyyyyyyyyyyyyyy",
+      "expect": {
+        "error": "bad_signature"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "Y2",
+      "att": "as-1.a03",
+      "level": 3,
+      "nonce": "yyyyyyyyyyyyyyyyyyyyyy",
+      "expect": {
+        "committed": 1,
+        "of": 3
+      }
+    },
+    {
+      "op": "commit",
+      "who": "A",
+      "att": "as-1.a01",
+      "level": 3,
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "committed": 2,
+        "of": 3
+      }
+    },
+    {
+      "op": "commit",
+      "who": "X",
+      "att": "as-1.a02",
+      "level": 4,
+      "nonce": "xxxxxxxxxxxxxxxxxxxxxx",
+      "expect": {
+        "committed": 3,
+        "of": 3
+      }
+    },
+    {
+      "op": "rotateDid",
+      "who": "X",
+      "newSeed": 21,
+      "newName": "X2",
+      "validFrom": "2026-03-03",
+      "revokeFrom": "2026-03-03",
+      "expect": {
+        "rotated": "did:web:x.example"
+      }
+    },
+    {
+      "op": "advance",
+      "hours": 48,
+      "expect": {
+        "advancedHours": 48
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "X",
+      "att": "as-1.a02",
+      "date": "2026-03-03",
+      "expect": {
+        "error": "bad_signature"
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "X",
+      "att": "as-1.a02",
+      "date": "2026-03-02",
+      "expect": {
+        "revealed": 1,
+        "of": 3
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "A",
+      "att": "as-1.a01",
+      "date": "2026-03-03",
+      "expect": {
+        "revealed": 2,
+        "of": 3
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "Y2",
+      "att": "as-1.a03",
+      "date": "2026-03-03",
+      "expect": {
+        "revealed": 3,
+        "of": 3
+      }
+    },
+    {
+      "op": "finalize",
+      "expect": {
+        "bundleHash": "22a029ec4bfec3890d7345be1dadb818c6b1269e4b8fef86ce97bca2e33846a8",
+        "process": {
+          "invited": 3,
+          "committed": 3,
+          "revealed": 3,
+          "missing": [],
+          "late": [],
+          "notCommitted": []
+        },
+        "checksPass": true,
+        "recognition": {
+          "status": "recognised",
+          "level": 3,
+          "confidence": 0.935
+        },
+        "attestorStats": {
+          "did:key:z6Mkj1MDZKcfx9AX5CeXHdysiGkRLzBbALyFuShD6wNeY1E3": {
+            "sittings": 0,
+            "agreement": 0
+          },
+          "did:web:x.example": {
+            "sittings": 0,
+            "agreement": 0
+          },
+          "did:web:y.example": {
+            "sittings": 0,
+            "agreement": 0
+          }
+        },
+        "logSize": 7,
+        "logRoot": "da2575d6680e583e931969794f8d1fb0c80d618ca50f2c7cb9a8f3a269864812"
+      }
+    },
+    {
+      "op": "verify",
+      "expect": {
+        "ok": true,
+        "failed": [],
+        "recognition": {
+          "status": "recognised",
+          "level": 3,
+          "confidence": 0.935
+        },
+        "dropped": []
+      }
+    }
+  ]
+}
