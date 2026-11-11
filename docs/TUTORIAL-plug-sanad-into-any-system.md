@@ -44,7 +44,7 @@ The attestor signs in their own client: a browser page (`engine/static/sanad-cli
 2. The host opens an **assessment** for a pseudonymous subject, with its evidence items.
 3. The operator **invites** attestors by DID, one invitation per attestor per evidence item. An invitation can be **removed** before that attestor's first commit.
 4. Each attestor **commits**: a signed hash of attestor, evidence, level and nonce. Nothing about the mark is readable.
-5. When every invited attestor has committed, or the commit deadline has passed, the reveal phase opens. Each attestor **reveals** level and nonce, signed.
+5. When the roster is complete and every invited attestor has committed, or the commit deadline has passed, the reveal phase opens. The roster is complete when every evidence item that needs human attestors has at least `attestors.min` invitations, or when the operator has closed the invitations (`POST /v1/assessments/:id/close-invitations`); a first invitee's commit therefore cannot open the phase alone. Once open, the phase never closes. Each attestor **reveals** level and nonce, signed.
 6. At any time after reveals start, anyone may ask for a **preview** of recognition over the marks revealed so far (provisional, never reading an unrevealed mark).
 7. The operator **finalizes** after all reveals or after the reveal deadline. Missing and late reveals are recorded, not hidden. The engine **enforces the template**: every evidence item that needs human attestors needs at least `attestors.min` revealed attestors, and a live-sitting template needs revealed marks on sitting evidence, otherwise `below_template_minimum`. The operator can finalize anyway with `allowShortfall`, which is written into the credential (`process.shortfall`) and shown to verifiers as a warning.
 8. Anyone **verifies**, with their own policy.
@@ -90,10 +90,10 @@ const report = verifyCredential(credential, {
 // report.recognition   what this verifier's policy makes of the chain: status, level, confidence, explanation
 ```
 
-There is **no default policy and no default evaluation day** in the library or the HTTP route: without a policy the report is `ok: false` with `recognition: null`, unless the caller passes `useRecommendedPolicy` (the issuer's recommendation, labelled in `report.basis`). The CLI defaults to the recommendation and prints that it did. Verification needs no network and no engine instance. Three trust rules follow from keys being what is trusted, not DID names:
+There is **no default policy and no default evaluation day** in the library or the HTTP route: without a policy the report is `ok: false` with `recognition: null`, unless the caller passes `useRecommendedPolicy` (the issuer's recommendation, labelled in `report.basis`). The CLI refuses to verify without `--policy`, unless `--use-recommended-policy` is given, which prints that the issuer's recommendation was used. Verification needs no network and no engine instance. Three trust rules follow from keys being what is trusted, not DID names:
 
 - **Pin the issuer and the log key.** Unpinned means `ok: false` unless `allowUnpinned`.
-- **A `did:web` identity's key history inside the credential is only the issuer's claim.** The verifier pins the key (`pinnedKeys`) or supplies the history (`trustedDidHistories`); otherwise `ok` is false. `did:web` registration in an engine is operator-asserted: nothing proves control of the domain.
+- **A `did:web` identity's key history inside the credential is only the issuer's claim.** The verifier pins the key (`pinnedKeys`) or supplies the history (`trustedDidHistories`); otherwise `ok` is false. Pinning a key does not pin its revocation history: a pinned key is accepted whenever the credential's history lists it as valid on the statement's date. A verifier that wants revocations to apply keeps the DID histories it trusts and passes them as `trustedDidHistories`. `did:web` registration in an engine is operator-asserted: nothing proves control of the domain.
 - **Attestor statistics are the issuer's statement.** They cannot be recomputed from the log. If the policy has a sittings or agreement threshold the verifier supplies its own `attestorStats` or accepts the issuer's with `allowIssuerStatistics` (a warning).
 
 ## 5. The port and adapter pattern
@@ -155,7 +155,7 @@ Sanad levels are 0 to 5. A host often has its own scale (1 to 6, A to F, percent
 
 ## 8. Subjects and pseudonyms
 
-The engine refuses a subject that is not a URN (`urn:uuid:<uuid>` is the usual choice) so that a name or an e-mail address cannot slip in. The host keeps the link from the pseudonym to the person, under its own privacy rules. Without that link a credential is unattributable by design; with it, the host decides who may see it. A URN can still be chosen badly (`urn:person:ada`): that is the host's responsibility. Credentials, the log and the engine's store then hold pseudonyms, DIDs and hashes only. **Tested:** the engine refuses names; the toy host test checks that the credential holds no name.
+The engine accepts only `urn:uuid:<RFC 4122 UUID, lower case>` or `urn:sanad:subject:<32 to 64 lower-case hex characters>` as a subject, so that a name or an e-mail address cannot be typed in by mistake. This is a **guard rail**, not proof of pseudonymity: the host must generate the value without using personal data (a random UUID, or a keyed hash with a key that stays in the host). The host keeps the link from the pseudonym to the person, under its own privacy rules. Without that link a credential is unattributable by design; with it, the host decides who may see it. Evidence `summary` and `body`, the assessment id and every other free-text field end up in the public credential and the engine's store: they must not hold names, addresses or other personal data either. Credentials, the log and the engine's store then hold pseudonyms, DIDs and hashes only. **Tested:** the engine refuses names; the toy host test checks that the credential holds no name.
 
 ## 9. Template design
 
@@ -221,13 +221,13 @@ A third provider, whether a different transport or a second implementation of th
 | An examiner commits and never reveals | After `revealBy`, finalize records `missing` and a `missing-reveal` log leaf | Nothing; this is visible evidence |
 | A reveal is late | `reveal_late`, recorded as late | A new assessment if needed; no edits |
 | A commit is copied or replayed | `commit_mismatch_invitation`, `already_committed` | Nothing |
-| A reveal before everyone committed | `reveal_not_open` | Tell the examiner to wait; this protects blindness |
+| A reveal before everyone committed, or before the roster is complete | `reveal_not_open` | Tell the examiner to wait, or close the invitations if the roster is final; this protects blindness |
 | Wrong key signs | `bad_signature` (401) with `reason` | Check the examiner uses the key behind the invited DID |
 | Wrong date on a reveal | `bad_date` | Use the provider's day, not the device's |
 | Native mark disagrees with the level | `native_mismatch` at the reveal | The client library maps native marks; do not hand-write nonces |
 | Remove after commit | `already_committed` | Not possible by design |
 | A key was rotated or revoked | Statements dated before the revocation still verify, later ones do not | Register DID histories for non-`did:key` identities; `did:key` holders replace their identity |
-| Attestor key stolen | A thief can sign statements with earlier dates; the log time of the commit is the defence | Revoke in the DID history; verifiers read log times. Not fully solved |
+| Attestor key stolen | A thief can sign statements with earlier dates, and **no verifier detects this**: the key is checked against the date the statement itself carries | Revoke in the DID history for future statements; keep the signed commits and checkpoints; verifiers who pin a verifier-held DID history (`trustedDidHistories`) at least see revocations they know about. Not solved |
 | The log was rewritten | The consistency proof against a kept checkpoint fails | Treat the log as untrusted; restore from backup; tell verifiers |
 | The provider is down | `provider_unreachable` | Queue and retry; never fabricate or sign locally |
 | The operator's clock steps back | The engine's clock never runs backwards; a commit is refused once any reveal exists | Nothing; fix the clock for future deadlines |

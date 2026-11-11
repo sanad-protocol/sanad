@@ -10,8 +10,8 @@ toc: true
 
 <!-- glance -->
 - Ein kleines Programm, das eine Prüfung von der Vorlage bis zum versiegelten Nachweis durchführt, mit verdeckten Festlegungen, Transparenzprotokoll und Verifikation nach der Richtlinie der prüfenden Stelle.
-- Setzt den Algorithmus `sanad-0.1` aus SANAD-SPEC-0.1 unverändert um. Paketversion 0.2.0. Keine Laufzeitabhängigkeiten; Node 22 oder neuer.
-- Bestätigende behalten ihre eigenen Schlüssel. Noch keine externe kryptografische Prüfung und keine unabhängige Implementierung.
+- Setzt den Algorithmus `sanad-0.1` aus SANAD-SPEC-0.1 mit drei Abweichungen vom v0.1-Referenzcode um, die offene Entscheidungen sind (siehe unten). Paketversion 0.2.0. Keine Laufzeitabhängigkeiten; Node 22 oder neuer.
+- Bestätigende behalten ihre eigenen Schlüssel. Experimentell: keine externe kryptografische Prüfung. Vertrauen beruht auf dem, was die prüfende Stelle festlegt (Pinning).
 <!-- /glance -->
 
 ## Was die Engine ist
@@ -31,7 +31,7 @@ Die Engine gibt es als Bibliothek, als HTTP-Schnittstelle (`node:http`), als Kom
 
 ## Verhältnis zur Spezifikation
 
-Die Engine setzt den Algorithmus `sanad-0.1` aus [SANAD-SPEC-0.1](/spec/0.1/) um und ändert ihn nicht. Die Spezifikation bleibt bei Version 0.1; der Code hat Version 0.2.0. Wo Spezifikationstext und Referenzcode voneinander abweichen, folgt die Engine dem Referenzcode und den 20 Konformitätsvektoren. Die Abweichungen stehen unter [Offene Punkte](#offene-punkte).
+Die Engine setzt den Algorithmus `sanad-0.1` aus [SANAD-SPEC-0.1](/spec/0.1/) mit Abweichungen vom v0.1-Referenzcode um. Die Spezifikation bleibt bei Version 0.1 und ihr Text wird nicht geändert; der Code hat Version 0.2.0. Die Regeln dieses Codes weichen in drei Punkten vom v0.1-Referenzcode ab: Eine zweite Bewertung derselben bestätigenden Person für denselben Beleg wird unter R1 verworfen (v0.1 zählte beide); mit der optionalen Signaturprüfung verwirft eine fehlgeschlagene Signatur die Bestätigung unter R1 (v0.1 prüfte keine Signaturen); und eine Richtlinie muss vollständig und im Wertebereich sein, die behauptete Stufe muss 0 bis 5 sein, sonst verweigert die Funktion die Auswertung (v0.1 rechnete mit allem, was sie bekam). Ohne doppelte Bewertungen, mit gültiger vollständiger Richtlinie und ohne Signaturprüfung sind die Ergebnisse gleich denen von v0.1, und die 20 Konformitätsvektoren liefern dieselben Ergebnisse; bei zufälligen Nachweisen mit doppelten Bewertungen weichen sie ab. Ob die geänderten Regeln eine neue Algorithmus-Kennung brauchen, ist eine offene Entscheidung (siehe Offene Punkte). Wo Spezifikationstext und Referenzcode voneinander abweichen, folgt die Engine dem Referenzcode und den 20 Konformitätsvektoren. Die Abweichungen stehen unter [Offene Punkte](#offene-punkte).
 
 ## Die Bestandteile
 
@@ -121,13 +121,19 @@ Ein `did:key` kann nicht gewechselt werden; ein verlorener oder kompromittierter
 - Jede signierte Nutzlast nennt die Prüfung, die Bestätigungskennung und ihren Signaturtyp, und eine Festlegung wird nur einmal angenommen; eine Aussage lässt sich also nicht für einen anderen Zweck wiederverwenden.
 - Die Mitgliedermengen sind geschlossen, das JSON ist kanonisch und der Bündel-Hash deckt vollständige Objekte ab; ein versiegeltes Bündel lässt sich also nicht ändern, ohne den Hash zu ändern.
 - Geheimnisse wie das Betriebstoken werden in konstanter Zeit verglichen. Festlegungen sind öffentliche Werte.
-- Rückdatierung mit einem gestohlenen Schlüssel ist nicht vollständig gelöst: Ein widerrufener Schlüssel kann weiterhin Aussagen mit früherem Datum signieren. Dagegen hilft der Protokollzeitpunkt der Festlegung, den der Prüfbericht zeigt.
+- Rückdatierung mit einem gestohlenen Schlüssel wird nicht erkannt: Ein widerrufener oder gestohlener Schlüssel kann weiterhin Aussagen mit früherem Datum signieren, und die prüfende Stelle prüft den Schlüssel gegen das Datum, das die Aussage selbst trägt. Die Zeitstempel des Protokolls stammen vom Betreiber und schließen diese Lücke nicht.
 - Absprachen, Hilfe außerhalb des Kamerabildes und Identitätsprüfungen kann keine Software beweisen.
 
 ## Was nicht behauptet wird
 
-- Die Engine wurde nicht extern kryptografisch geprüft.
-- Keine unabhängige Implementierung prüft ihre Ausgaben nach.
+- Die Engine ist experimentell und wurde nicht extern kryptografisch geprüft.
+- Zwei unabhängige Prüfprogramme, aus den Dokumenten geschrieben (Python und Ruby, in `engine/test/crosscheck/`), stimmen auf den Beispielnachweisen mit ihr überein. Das zeigt, dass die Formate reproduzierbar sind; es ist keine Prüfung.
+- Statistiken der Bestätigenden (Sitzungen, Übereinstimmung) liefert die ausstellende Stelle; sie lassen sich aus dem Protokoll, das nur Hashwerte enthält, nicht nachrechnen.
+- Eine `did:web`-Identität wird vom Betreiber behauptet: Nichts belegt, dass der Registrierende die Domain kontrolliert, und eine im Nachweis mitgelieferte Schlüsselhistorie ist nur die Behauptung der ausstellenden Stelle. Die prüfende Stelle muss die Schlüssel festlegen (Pinning).
+- Dass jede Festlegung vor jeder Offenlegung kam, bestätigt der Betreiber; der Nachweis enthält die signierten Festlegungen nicht.
+- Eine Prüfung ist nur so vertrauenswürdig wie das, was die prüfende Stelle festlegt: Ein nicht festgelegter Aussteller oder Protokollschlüssel oder eine eingebettete Historie lässt den Bericht scheitern.
+- Der HTTP-Server hat keine Ratenbegrenzung; der Prüfaufwand ist durch feste Obergrenzen für die Größe eines Dokuments beschränkt.
+- Betroffene müssen UUID- oder Hash-URNs sein; das ist eine Schutzplanke und kein Beweis, dass nichts Persönliches enthalten ist; Freitext in Belegen ist öffentlich.
 - Die Primitive Ed25519 und SHA-256 stammen von Node.
 - Es gibt noch keine Bestätigenden außerhalb des Umfelds der verantwortlichen Person.
 - Sie ist keine Blockchain, hat kein Token und ist keine Akkreditierung.
@@ -138,10 +144,10 @@ Eine Plattform behält ihre eigenen Abläufe und lässt genau ein Modul mit der 
 
 ## Offene Punkte
 
-Das Designdokument der Engine nennt zehn Stellen, an denen Spezifikationstext und Referenzcode voneinander abweichen oder eine Frage offen lassen. Die Spezifikation wird nicht geändert; die Engine folgt dem Referenzcode und den Vektoren. Kurz gefasst betrifft das: die Form des Commit-Hashs; Feldnamen in Bestätigungen und Belegen; was der Beleg-Hash abdeckt; die Länge eines Monats; was die Signatur der Bestätigenden abdeckt; den Umgang mit einer fehlgeschlagenen Signatur unter R1; die Definition des Bündel-Hashs; welchen Median die Übereinstimmungsstatistik verwendet; wie ein Nachweis gesichert wird; und welche Ereignisse protokolliert werden. Die vollständige Liste (englisch) steht im [Designdokument](https://github.com/sanad-protocol/sanad/blob/main/engine/DESIGN.md).
+Das Designdokument der Engine nennt zehn Stellen (Punkte 1 bis 10 seines Abschnitts 14), an denen Spezifikationstext und Referenzcode voneinander abweichen oder eine Frage offen lassen, und spätere Punkte (11 bis 40), die Entscheidungen der Engine und die drei Regeländerungen festhalten. Eine eigene Liste, [Spec decisions needed before v1.0](https://github.com/sanad-protocol/sanad/blob/main/docs/SPEC-DECISIONS-NEEDED.md) (englisch), enthält 24 Entscheidungen mit Optionen und je einer Empfehlung, darunter die signierten Festlegungen im Nachweis, was die Signatur der Bestätigenden abdeckt, nachprüfbare Statistiken, die Kettenregel, die Monatslänge (eine harte Schwelle, keine Rundung) und eine mögliche `sanad-0.2`. Die Spezifikation wird nicht geändert; die Engine folgt dem Referenzcode und den Vektoren. Die ersten zehn, kurz gefasst: die Form des Commit-Hashs; Feldnamen in Bestätigungen und Belegen; was der Beleg-Hash abdeckt; die Länge eines Monats; was die Signatur der Bestätigenden abdeckt; den Umgang mit einer fehlgeschlagenen Signatur unter R1; die Definition des Bündel-Hashs; welchen Median die Übereinstimmungsstatistik verwendet; wie ein Nachweis gesichert wird; und welche Ereignisse protokolliert werden. Die vollständige Liste (englisch) steht im [Designdokument](https://github.com/sanad-protocol/sanad/blob/main/engine/DESIGN.md).
 
 ## Konformitätserklärung
 
-Die Sanad-Engine 0.2.0 setzt die Konformitätsklassen Verifier, Issuer, Attestor (Hilfsprogramm für Clients) und Log von SANAD-SPEC-0.1 um, soweit die öffentlichen Vektoren sie prüfen: Sie besteht die 20 Konformitätsvektoren der Spezifikation und die Engine-Vektoren in `engine/vectors/`. Diese Erklärung stammt von der verantwortlichen Person; sie wurde von keiner unabhängigen Stelle geprüft.
+Die Sanad-Engine 0.2.0 setzt die Konformitätsklassen Verifier, Issuer, Attestor (Hilfsprogramm für Clients) und Log von SANAD-SPEC-0.1 um, soweit die öffentlichen Vektoren sie prüfen: Sie besteht die 20 Konformitätsvektoren der Spezifikation und die Engine-Vektoren in `engine/vectors/`. Einschränkungen: Die 20 Konformitätsvektoren werden zur Laufzeit versiegelt und legen keine Hashwerte fest, sie prüfen also Verhalten und keine Übereinstimmung auf Byte-Ebene; die Engine-Vektoren legen Bündel-Hashes fest, stammen aber aus dieser Implementierung; die Engine weicht in den drei oben genannten Regeln vom v0.1-Referenzcode ab, und die Entscheidungen in `docs/SPEC-DECISIONS-NEEDED.md` sind offen; die Engine ist experimentell und nicht kryptografisch geprüft. Diese Erklärung stammt von der verantwortlichen Person; sie wurde von keiner unabhängigen Stelle geprüft.
 
 Siehe auch [Konformität](/conformance/) und [Für Implementierende](/for/implementers/).

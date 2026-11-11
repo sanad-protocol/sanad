@@ -8,7 +8,7 @@ description: What Sanad is today, what exists, and what it does not claim.
 ---
 
 <!-- glance -->
-- Specification version 0.1; code version 0.2 (algorithm `sanad-0.1` unchanged).
+- Specification version 0.1; code version 0.2 (algorithm string `sanad-0.1`, with three rule differences from the v0.1 reference code that are open decisions).
 - No accreditation. No token. No ranking of people.
 - One steward for now; a foundation in the United Arab Emirates is in preparation.
 <!-- /glance -->

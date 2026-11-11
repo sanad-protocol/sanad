@@ -10,8 +10,8 @@ toc: true
 
 <!-- glance -->
 - A small program that runs an assessment from template to sealed credential, with blind commits, a transparency log and verification under the verifier's own policy.
-- Implements algorithm `sanad-0.1` of SANAD-SPEC-0.1 unchanged. Package version 0.2.0. No runtime dependencies; Node 22 or later.
-- Attestors keep their own keys. No external cryptographic review and no independent implementation yet.
+- Implements algorithm `sanad-0.1` of SANAD-SPEC-0.1 with three differences from the v0.1 reference code that are open decisions (see below). Package version 0.2.0. No runtime dependencies; Node 22 or later.
+- Attestors keep their own keys. Experimental: no external cryptographic review. Trust rests on what the verifier pins.
 <!-- /glance -->
 
 ## What the engine is
@@ -31,7 +31,7 @@ The engine is available as a library, an HTTP API (`node:http`), a command-line 
 
 ## Relation to the specification
 
-The engine implements algorithm `sanad-0.1` of [SANAD-SPEC-0.1](/spec/0.1/) and does not change it. The specification stays at version 0.1; the code is at version 0.2.0. Where the specification text and the reference code differ, the engine follows the reference code and the 20 conformance vectors. The differences are listed under [open points](#open-points).
+The engine implements algorithm `sanad-0.1` of [SANAD-SPEC-0.1](/spec/0.1/) with differences from the v0.1 reference code. The specification stays at version 0.1 and its text is not edited; the code is at version 0.2.0. The rules of this code differ from the v0.1 reference in three ways: a second mark by the same attestor on one evidence item is dropped under R1 (v0.1 counted both); with the optional signature check, a failing signature drops the attestation under R1 (v0.1 did not check signatures); and a policy must be complete and in range and the claimed level must be 0 to 5, otherwise the function refuses (v0.1 computed from whatever it was given). On credentials without duplicate marks, with a valid complete policy and no signature check, the results equal v0.1's, and the 20 conformance vectors give the same results; on random credentials with duplicate marks they differ. Where the specification text and the reference code differ, the engine follows the reference code. Whether the changed rules need a new algorithm id is an open decision, listed under [open points](#open-points).
 
 ## The parts
 
@@ -121,13 +121,19 @@ A `did:key` cannot rotate; a lost or compromised `did:key` is replaced by a new 
 - Every signed payload names the assessment, the attestation id and its signature type, and a commit is accepted once, so a statement cannot be replayed for another purpose.
 - Member sets are closed, JSON is canonical, and the bundle hash covers complete objects, so a sealed bundle cannot be altered without changing the hash.
 - Secrets such as the operator token are compared in constant time. Commits are public values.
-- Backdating with a stolen key is not fully solved: a revoked key can still sign statements with an earlier date. The log time of the commit is the defence, and the verifier report shows it.
+- Backdating with a stolen key is not detected: a revoked or stolen key can still sign statements with an earlier date, and the verifier checks the key against the date the statement carries. The log's timestamps are the operator's and do not close this gap.
 - Collusion, help off camera and identity checks are outside what any software can prove.
 
 ## What is not claimed
 
-- The engine has had no external cryptographic review.
-- No independent implementation checks its outputs.
+- The engine is experimental and has had no external cryptographic review.
+- Two independent verifiers written from the documents (Python and Ruby, in `engine/test/crosscheck/`) agree with it on the example credentials. That shows the formats can be reproduced; it is not a review.
+- Attestor statistics (sittings, agreement) are supplied by the issuer and cannot be recomputed from the hash-only log.
+- A `did:web` identity is operator-asserted: nothing proves that the registrant controls the domain, and a key history carried inside a credential is only the issuer's claim. A verifier must pin the keys.
+- That every commit came before any reveal is attested by the operator; the credential does not carry the signed commits.
+- Verification is only as trustworthy as what the verifier pins: an unpinned issuer or log key, or an embedded history, makes the report fail.
+- The HTTP server has no rate limiting; verification work is bounded by fixed limits on the size of a document.
+- Subjects must be UUID or opaque hash URNs, which is a guard rail, not proof that nothing personal is inside; free text in evidence is public.
 - The Ed25519 and SHA-256 primitives are those of Node.
 - There are no attestors outside the steward's circle yet.
 - It is not a blockchain, has no token, and is not accreditation.
@@ -138,10 +144,10 @@ A platform keeps its own workflow and lets one module talk to the engine. There 
 
 ## Open points
 
-The design document lists ten places where the specification text and the reference code differ or leave a question open. The specification is not edited; the engine follows the reference code and the vectors. In summary: the form of the commit hash; field names in attestations and evidence; what the evidence hash covers; the length of a month; what an attestor signature covers; how a failed signature is treated under R1; the definition of the bundle hash; which median the agreement statistic uses; how a credential is secured; and which events are logged. Read the full list in the [design document](https://github.com/sanad-protocol/sanad/blob/main/engine/DESIGN.md).
+The design document lists ten places (items 1 to 10 of its section 14) where the specification text and the reference code differ or leave a question open, and later items (11 to 40) that record the engine's own decisions and the three rule changes above. A separate list, [Spec decisions needed before v1.0](https://github.com/sanad-protocol/sanad/blob/main/docs/SPEC-DECISIONS-NEEDED.md), has 24 decisions with options and a recommendation each, among them carrying the signed commits in the credential, what an attestor signature covers, verifiable statistics, the chain rule, the month length (a hard threshold, not a rounding) and a possible `sanad-0.2`. The specification is not edited; the engine follows the reference code and the vectors. The first ten, in summary: the form of the commit hash; field names in attestations and evidence; what the evidence hash covers; the length of a month; what an attestor signature covers; how a failed signature is treated under R1; the definition of the bundle hash; which median the agreement statistic uses; how a credential is secured; and which events are logged. Read the full list in the [design document](https://github.com/sanad-protocol/sanad/blob/main/engine/DESIGN.md).
 
 ## Conformance statement
 
-The Sanad engine 0.2.0 implements the Verifier, Issuer, Attestor (client helper) and Log conformance classes of SANAD-SPEC-0.1 as far as the public vectors test them: it passes the 20 conformance vectors of the specification and the engine vectors in `engine/vectors/`. This statement is made by the steward; it has not been checked by an independent party.
+The Sanad engine 0.2.0 implements the Verifier, Issuer, Attestor (client helper) and Log conformance classes of SANAD-SPEC-0.1 as far as the public vectors test them: it passes the 20 conformance vectors of the specification and the engine vectors in `engine/vectors/`. Caveats: the 20 conformance vectors are sealed at run time and pin no hashes, so they test behaviour and not byte-level agreement; the engine vectors do pin bundle hashes but were produced by this implementation; the engine differs from the v0.1 reference in the three rules above, and the decisions in `docs/SPEC-DECISIONS-NEEDED.md` are open; the engine is experimental and not cryptographically reviewed. This statement is made by the steward; it has not been checked by an independent party.
 
 See also [Conformance](/conformance/) and [For implementers](/for/implementers/).

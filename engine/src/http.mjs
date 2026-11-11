@@ -113,7 +113,7 @@ export function createHttpServer({ engine, operatorToken, serveStatic = true, on
       if (!Array.isArray(body[k]) || !body[k].every((x) => typeof x === 'string')) throw err('bad_request', k + ' must be a list of strings');
       opts[k] = body[k];
     }
-    for (const k of ['useRecommendedPolicy', 'useVerifierClock', 'allowUnpinned', 'allowIssuerStatistics', 'allowEmbeddedDids']) {
+    for (const k of ['useRecommendedPolicy', 'useVerifierClock', 'allowUnpinned', 'allowIssuerStatistics', 'allowEmbeddedDids', 'diagnose']) {
       if (body[k] === undefined) continue;
       if (typeof body[k] !== 'boolean') throw err('bad_request', k + ' must be true or false');
       opts[k] = body[k];

@@ -8,7 +8,7 @@ description: Was Sanad heute ist, was geprüft wurde, was nicht, und was Sanad n
 ---
 
 <!-- glance -->
-- Spezifikation in Version 0.1; Code in Version 0.2 (Algorithmus `sanad-0.1` unverändert).
+- Spezifikation in Version 0.1; Code in Version 0.2 (Algorithmus-Kennung `sanad-0.1`, mit drei Regelabweichungen vom v0.1-Referenzcode, die offene Entscheidungen sind).
 - Keine Akkreditierung. Kein Token. Keine Rangliste von Personen.
 - Vorerst eine verantwortliche Person; eine Stiftung in den Vereinigten Arabischen Emiraten ist in Vorbereitung.
 <!-- /glance -->

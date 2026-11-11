@@ -7,7 +7,7 @@
 - Exports map and type declarations.
 - New `sanad` command with `verify` and `run-vectors`.
 - Optional signature check in rule R1; without it the behaviour is as in 0.1.
-- Algorithm `sanad-0.1` unchanged; the 20 conformance vectors unchanged.
+- Algorithm string `sanad-0.1`; the 20 conformance vectors give the same results. Three rules differ from the v0.1 reference code (duplicate marks by one attestor are dropped under R1; a failing signature drops the attestation under R1 when the check is given; a complete valid policy and a claimedLevel of 0 to 5 are required), so results differ on credentials with duplicate marks. See `docs/SPEC-DECISIONS-NEEDED.md`, decision 11.
 
 ### Engine (`@sanad-protocol/engine` 0.2.0)
 
