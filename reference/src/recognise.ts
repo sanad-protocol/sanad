@@ -66,6 +66,7 @@ export function checkIntegrity(cred: Credential, opts: RecogniseOptions = {}): {
   const evOk = new Map(evidence.map((x) => [x.id, x.ok]));
   const attestations = atts.map((a, i): Integrity => {
     const why: string[] = [];
+    if (a.attestor === REPLAY) why.push('the attestor name "' + REPLAY + '" is reserved for automatic records and cannot be a human attestor');
     if (!levelOk(a.level)) why.push('level is not 0..5');
     else {
       if (attestationHashOf(a) !== a.hash) why.push('its content no longer matches its hash (changed after sealing)');
@@ -88,6 +89,7 @@ interface Item { att: Attestation | null; attestor: string; level: Level; eviden
 
 export function recognise(cred: Credential, policy: Policy, opts: RecogniseOptions = {}): Recognition {
   assertPolicy(policy);
+  if (!levelOk(cred.claimedLevel)) throw new RangeError('claimedLevel must be an integer from 0 to 5');
   const asOf = dayNumber(policy.asOf);
   const minAtt = Math.max(1, Math.floor(policy.minAttestors));
   const steps: Step[] = []; const dropped: Dropped[] = [];
@@ -116,7 +118,9 @@ export function recognise(cred: Credential, policy: Policy, opts: RecogniseOptio
   for (const a of atts) {
     if (attBad.has(a.id)) continue; const e = evAdm.get(a.evidence); if (!e) continue; // its evidence was dropped (reported on the evidence)
     if (e.kind === 'auto') continue; // an automatic record carries its own replayed level
-    const st = cred.attestors[a.attestor] ?? { sittings: 0, agreement: 0 };
+    // own property and numbers only: an attestor named like an object method, or statistics of the wrong type, count as no statistics
+    const raw = Object.prototype.hasOwnProperty.call(cred.attestors, a.attestor) ? cred.attestors[a.attestor] : undefined;
+    const st = raw && Number.isFinite(raw.sittings) && Number.isFinite(raw.agreement) ? raw : { sittings: 0, agreement: 0 };
     let why = '';
     if (opts.allowAttestor && !opts.allowAttestor(a.attestor)) why = 'the attestor is not on the verifier\'s allow-list';
     else if (a.conflictDeclared) why = 'a conflict of interest was declared';

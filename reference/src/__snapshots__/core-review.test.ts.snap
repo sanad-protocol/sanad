@@ -1,0 +1,31 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`pinned behaviour that differs from the specification text (see docs/SPEC-DECISIONS-NEEDED.md) > byte-level pins: the sealed sample credential has these hashes (the 20 vectors are sealed at run time and pin none) 1`] = `
+[
+  "0b70889ea0819c26",
+  "d22f5d904257dbf5",
+  "a503d9a266565acd",
+  "89a49751acc6a856",
+]
+`;
+
+exports[`pinned behaviour that differs from the specification text (see docs/SPEC-DECISIONS-NEEDED.md) > byte-level pins: the sealed sample credential has these hashes (the 20 vectors are sealed at run time and pin none) 2`] = `
+[
+  [
+    "2151181ac5d47031",
+    "a4178009cd050629",
+  ],
+  [
+    "31cff8b256d0aa3b",
+    "68d9cc6531e6e92a",
+  ],
+  [
+    "4b565376ca1d9408",
+    "75a4b2a88d1002ee",
+  ],
+  [
+    "47c3120c942ae43f",
+    "5fe63862909afa84",
+  ],
+]
+`;

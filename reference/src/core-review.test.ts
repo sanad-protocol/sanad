@@ -56,3 +56,44 @@ describe('allow-list (H2)', () => {
     expect(r.used.attestations.every((id) => c.attestations.find((a) => a.id === id)!.attestor === keep)).toBe(true);
   });
 });
+
+describe('second review: small hardening', () => {
+  it('claimedLevel must be an integer from 0 to 5', () => {
+    for (const v of [6, -1, 2.5, NaN]) { const c = { ...S(), claimedLevel: v as never }; expect(() => core.recognise(c, DEFAULT_POLICY)).toThrow(/claimedLevel/); }
+  });
+  it('attestor statistics are read from own properties and must be numbers', () => {
+    const c = S(); const who = c.attestations[0].attestor;
+    const a = core.recognise({ ...c, attestors: { ...c.attestors, [who]: { sittings: '99' as never, agreement: '1' as never } } }, DEFAULT_POLICY);
+    expect(a.dropped.some((d) => d.rule === 'R2' && /only 0 sitting/.test(d.reason))).toBe(true);
+    const o = Object.create({ [who]: { sittings: 99, agreement: 1 } }) as typeof c.attestors; // inherited, not own
+    expect(core.recognise({ ...c, attestors: o }, DEFAULT_POLICY).dropped.some((d) => d.rule === 'R2')).toBe(true);
+  });
+  it('the pseudo-attestor "replay" cannot be a human attestor', () => {
+    const c = S(); const e = c.evidence.find((x) => x.kind === 'sitting')!;
+    const forged = core.sealCredential({ skill: c.skill, claimedLevel: c.claimedLevel, subject: c.subject, attestors: { replay: { sittings: 9, agreement: 1 } }, evidence: c.evidence.map(({ hash: _h, ...x }) => x), attestations: [{ id: 'r-1', attestor: 'replay', evidence: e.id, level: 5, date: e.date }] });
+    const r = core.recognise(forged, DEFAULT_POLICY);
+    expect(r.dropped).toContainEqual(expect.objectContaining({ id: 'r-1', rule: 'R1' }));
+  });
+});
+
+describe('pinned behaviour that differs from the specification text (see docs/SPEC-DECISIONS-NEEDED.md)', () => {
+  const policy = { ...DEFAULT_POLICY, halfLifeMonths: 12, minAttestors: 1, requireLive: false, minAttestorSittings: 0, minAgreement: 0, asOf: '2026-11-07' };
+  const at = (days: number) => { const d = new Date(Date.UTC(2026, 10, 7) - days * 86400000).toISOString().slice(0, 10); return core.sealCredential({ skill: 's', claimedLevel: 3, subject: 'urn:uuid:x', attestors: { 'did:sanad:a': { sittings: 5, agreement: 1 } }, evidence: [{ id: 'e1', kind: 'sitting', date: d, summary: '', body: { kind: 'sitting', date: d } }], attestations: [{ id: 'a1', attestor: 'did:sanad:a', evidence: 'e1', level: 3, date: d }] }); };
+  it('month length: 1461 days is exactly 4 half-lives of 12 months at 30.4375 days, so the core keeps the evidence; the specification text value 30.436875 would drop it', () => {
+    expect(core.recognise(at(1461), policy).used.evidence).toEqual(['e1']);
+    expect(core.recognise(at(1462), policy).dropped).toContainEqual(expect.objectContaining({ id: 'e1', rule: 'R2' }));
+    expect(1461 / 30.4375).toBe(48); expect(1461 / 30.436875).toBeGreaterThan(48);
+  });
+  it('chain rule: the core drops only the attestation whose own prev link fails, not its honest successor (the specification text says both)', () => {
+    const c = S(); expect(c.attestations.length).toBeGreaterThan(2);
+    const bad = core.applyTamper(c, [{ attestation: c.attestations[1].id, set: { prev: 'f'.repeat(64) } }]);
+    const r = core.recognise(bad, DEFAULT_POLICY);
+    expect(r.dropped.filter((d) => d.rule === 'R1').map((d) => d.id)).toContain(c.attestations[1].id);
+    expect(r.dropped.filter((d) => d.rule === 'R1').map((d) => d.id)).not.toContain(c.attestations[2].id);
+  });
+  it('byte-level pins: the sealed sample credential has these hashes (the 20 vectors are sealed at run time and pin none)', () => {
+    const c = S();
+    expect(c.evidence.map((e) => e.hash.slice(0, 16))).toMatchSnapshot();
+    expect(c.attestations.map((a) => [a.commit.slice(0, 16), a.hash.slice(0, 16)])).toMatchSnapshot();
+  });
+});
