@@ -15,12 +15,13 @@ const files = (d, out = []) => {
   }
   return out;
 };
-const all = files(root).filter((f) => !/test\/philosophy\.test\.mjs$/.test(f));
+const docsRoot = fileURLToPath(new URL('../../docs/', import.meta.url));
+const all = [...files(root), ...files(docsRoot)].filter((f) => !/test\/philosophy\.test\.mjs$/.test(f));
 const read = (f) => readFileSync(f, 'utf8');
 const rel = (f) => relative(root, f);
 const code = (f) => /\/(src|static)\//.test(f) || /dist\/sanad-engine\.mjs$/.test(f);
 
-it('the scan covers the whole engine tree', () => { expect(all.length).toBeGreaterThan(30); expect(all.some((f) => f.endsWith('INTEGRATION-TUTORIAL.md'))).toBe(true); });
+it('the scan covers the whole engine tree', () => { expect(all.length).toBeGreaterThan(30); expect(all.some((f) => f.endsWith('TUTORIAL-plug-sanad-into-any-system.md'))).toBe(true); });
 
 describe('Sanad is a protocol and Kamangir is one host among many', () => {
   it('nothing in the engine tree (sources, page, bundle, examples, documents) names any one host', () => {
@@ -163,5 +164,5 @@ describe('honest limits are stated', () => {
   it('README and DESIGN say there has been no cryptographic review and that collusion cannot be proved', () => {
     for (const f of ['README.md', 'DESIGN.md']) { const t = read(join(root, f)); expect(t, f).toMatch(/no external cryptographic review|not been (externally )?reviewed/i); expect(t, f).toMatch(/collusion/i); }
   });
-  it('the integration tutorial marks what is untested', () => { expect(read(join(root, 'docs/INTEGRATION-TUTORIAL.md'))).toMatch(/untested/i); });
+  it('the integration tutorial marks what is untested', () => { expect(read(join(docsRoot, 'TUTORIAL-plug-sanad-into-any-system.md'))).toMatch(/untested/i); });
 });

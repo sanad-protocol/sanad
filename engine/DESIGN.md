@@ -38,7 +38,8 @@ Runtime dependencies: none. Node 22 or later (`node:crypto` Ed25519, `node:http`
 | `engine/vectors/` | `engine-*.json` vectors (deterministic keys and clock), `harness.mjs`, `run.mjs`, `generate.mjs` |
 | `engine/test/` | Unit, property, end-to-end, HTTP, CLI, vector, bundle and principle-regression tests (vitest); `philosophy.test.mjs` fails if a design principle is changed |
 | `engine/index.d.ts` | Type declarations (not compiled by a TypeScript compiler in this repository's tests; a test checks that every declared name exists) |
-| `docs/INTEGRATION-TUTORIAL.md` (this folder: `engine/docs/`) | How to plug the engine into any system, in three modes |
+| `docs/TUTORIAL-plug-sanad-into-any-system.md` (repository root `docs/`) | The public tutorial: how to plug Sanad into any system, in three modes |
+| `engine/examples/host-port.mjs` | The port/adapter module of the tutorial: one async interface, an embedded and an HTTP provider chosen by configuration; `test/port-contract.test.mjs` runs one contract suite on both |
 
 ## 3. Data formats
 
@@ -108,24 +109,72 @@ Attestor statistics (spec 3.4): `sittings` is the number of finalized assessment
 
 ## 8. HTTP API
 
-JSON over `node:http`, body limit 256 KiB, `content-type: application/json` required on POST. Operator routes need `authorization: Bearer <operator token>` (compared in constant time). Attestor routes are open because the body is signed. Errors are `{ "error": code, "message": text }`.
+JSON over `node:http`. Body limit 256 KiB (`413 body_too_large`); `content-type: application/json` required on every POST (`415`); malformed JSON is `400 bad_json`. There is **no rate limiting, no session, no cookie and no CORS header**: the host puts the server behind its own TLS, authentication and limits, or binds it to localhost. Node's default server timeouts apply (a client should allow about 10 seconds). Operator routes need `authorization: Bearer <operator token>` (compared in constant time; `401 unauthorized`). Attestor routes are open because the body is signed. Every error is `{ "error": code, "message": text }` (plus `reason` for `bad_signature`); the status is the engine's (400 bad input, 401 signature or token, 403 not invited, 404 unknown, 409 state conflict, 413, 415, 500 `internal` with no detail).
 
-| Method and path | Who | Purpose |
-|---|---|---|
-| `GET /healthz` | anyone | liveness |
-| `GET /v1/info` | anyone | engine version, algorithm, issuer DID, log id |
-| `POST /v1/templates`, `GET /v1/templates`, `GET /v1/templates/:id` | operator / anyone | register and read templates |
-| `POST /v1/dids`, `GET /v1/dids/:did` | operator / anyone | register a DID document history or a signed update |
-| `POST /v1/assessments`, `GET /v1/assessments/:id` | operator / anyone | create; public view (no nonces before reveal) |
-| `POST /v1/assessments/:id/invite` | operator | invite an attestor |
-| `POST /v1/assessments/:id/commit` | attestor (signed) | blind commit |
-| `POST /v1/assessments/:id/reveal` | attestor (signed) | reveal |
-| `POST /v1/assessments/:id/finalize` | operator | seal and issue the credential |
-| `GET /v1/credentials/:id` | anyone | the credential |
-| `POST /v1/verify` | anyone | verification report for a posted credential and optional policy |
-| `GET /v1/log/checkpoint`, `/v1/log/entries`, `/v1/log/inclusion`, `/v1/log/consistency` | anyone | log |
-| `GET /v1/attestors/:did/stats` | anyone | derived statistics |
-| `GET /` | anyone | the demonstration page (strict CSP, no external code) |
+All bodies below are exact; unknown extra members in a request body are ignored by the engine and never stored, except in template, DID and statement bodies, which have closed member sets and are refused if they carry others.
+
+| Method and path | Who | Request body | Response body (200) |
+|---|---|---|---|
+| `GET /healthz` | anyone | none | `{ "ok": true }` |
+| `GET /v1/info` | anyone | none | `{ engine, alg, issuer, logId, logKey, time, today }`. `time` is the provider's current ISO date-time and `today` its `YYYY-MM-DD`; reveal dates and key validity use this clock, so a host reads it instead of trusting its own |
+| `POST /v1/templates` | operator | a template (section 10) | `{ "id", "hash" }`; registering the same id with the same content again returns the same pair, with different content `409 template_exists` |
+| `GET /v1/templates` | anyone | none | `[ { id, hash, title, version } ]` |
+| `GET /v1/templates/:id` | anyone | none | the template |
+| `POST /v1/dids` | operator | a DID history `{ id, versions: [version 1] }`, or an update `{ did, version, jws }` | the stored history `{ id, versions }` |
+| `GET /v1/dids/:did` | anyone | none | the stored history, or `404 did_unknown` |
+| `POST /v1/assessments` | operator | `{ templateId, subject, claimedLevel, evidence: [{ key, date, summary, body }], commitBy?, revealBy?, id? }` | the public view (below) |
+| `GET /v1/assessments` | operator | none | `[ { id, templateId, subject, state, credentialId, createdAt } ]` |
+| `GET /v1/assessments/:id` | anyone | none | the public view: `{ id, templateId, templateHash, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, removed, commits, reveals, late, state, credentialId, revealOpen }`. `commits` holds `{ commit, payload, jws, at }` per attestation id; `reveals` is empty until `revealOpen`; no nonce and no level is ever present before a reveal |
+| `POST /v1/assessments/:id/invite` | operator | `{ attestor, role, evidence }` (`evidence` is the key `E1` or the full id) | the invitation `{ attestationId, attestor, role, evidence, invitedAt }` |
+| `POST /v1/assessments/:id/invitations/:att/remove` | operator | `{ reason? }` (up to 200 characters) | `{ removed, invited }`; `409 already_committed` after that attestor's first commit; see section 8a |
+| `GET /v1/assessments/:id/ticket/:att` | anyone | none | the signing ticket (section 8a) |
+| `POST /v1/assessments/:id/commit` | attestor (signed) | `{ attestationId, payload, jws }` | `{ committed, of }` |
+| `POST /v1/assessments/:id/reveal` | attestor (signed) | `{ attestationId, statement, jws }` | `{ revealed, of }` |
+| `POST /v1/assessments/:id/preview` | anyone | `{ policy? }` (all seven policy fields, `asOf?`) | the recognition preview (section 8a) |
+| `POST /v1/assessments/:id/finalize` | operator | `{}` | **the credential document** (section 3) |
+| `GET /v1/credentials/:id` | anyone | none | the credential (the id is URL-encoded: `urn:uuid:...`) |
+| `POST /v1/verify` | anyone | `{ credential, policy?, trustedIssuers?, trustedLogKeys?, asOf? }` | the report `{ ok, checks: [{ name, ok, detail }], recognition, inferred, warnings }` |
+| `GET /v1/log/checkpoint` | anyone | none | `{ payload: { logId, size, rootHash, timestamp }, jws }` |
+| `GET /v1/log/entries?from=&to=` | anyone | none | `{ size, from, to, entries }` (at most 1000 per call) |
+| `GET /v1/log/inclusion?index=&size=` | anyone | none | `{ index, size, leafHash, proof, root }` |
+| `GET /v1/log/consistency?m=&n=` | anyone | none | `{ m, n, proof, rootM, rootN }` |
+| `GET /v1/attestors/:did/stats` | anyone | none | `{ sittings, agreement }` |
+| `GET /` and its four static files | anyone | none | the demonstration page (strict CSP, no external code) |
+
+## 8a. The browser attestor flow: signing ticket, preview, removal
+
+**Who does what.** The operator creates the assessment and invites an attestor by DID. The host gives the attestor's client a **signing ticket**. The client, which holds the attestor's private key, builds and signs the commit, sends it, later builds and signs the reveal, and sends that. Neither the ticket nor any request ever contains the key. A host that signs on an attestor's behalf has left the protocol.
+
+**The signing ticket** (`GET /v1/assessments/:id/ticket/:attestationId`, library `engine.ticketFor(assessmentId, attestationId)`) is public data and holds no secret:
+
+```
+{ "ticketVersion": 1, "alg": "sanad-0.1",
+  "assessment": "<id>", "attestationId": "<id>.a01", "attestor": "<did>", "role": "<role>", "evidence": "<id>.E1",
+  "templateHash": "<64 hex>", "levels": [0,1,2,3,4,5], "levelMap": { "<native>": level, ... },       // levelMap only if the template has one
+  "commitBy": "<iso>", "revealBy": "<iso>", "state": "open|finalized", "revealOpen": false,
+  "serverTime": "<iso>", "serverDay": "YYYY-MM-DD",
+  "rules": { "nonce": { "pattern": "...", "minLength": 22, "hint": "..." },
+             "date": { "format": "YYYY-MM-DD", "notBefore": "<evidence date>", "notAfter": "the provider day at the moment of the reveal" },
+             "level": "integer listed in levels" },
+  "commit": { "typ": "sanad-commit+jws", "type": "sanad-commit", "members": [...], "commit": "sha256(canonical({attestor, evidence, level, nonce}))", "post": "/v1/assessments/<id>/commit" },
+  "attestation": { "typ": "sanad-attestation+jws", "members": [...], "id": "<attestationId>", "post": "/v1/assessments/<id>/reveal" } }
+```
+
+The client turns the ticket into the two requests:
+
+1. Choose a level from `levels` (or a native mark, below) and a fresh nonce: 16 random bytes as base64url (22 characters), at least 22 and at most 128 characters of `[A-Za-z0-9_-]`.
+2. `commit = SHA-256(canonical({ attestor, evidence, level, nonce }))` as lowercase hex. Payload `{ type: "sanad-commit", assessment, attestationId, attestor, evidence, role, commit, templateHash }`; `jws` is the detached JWS of section 3 with `typ` `sanad-commit+jws`. Request body `{ attestationId, payload, jws }`. Keep `{ attestationId, level, nonce }` on the device.
+3. When the reveal phase is open (`revealOpen` in a fresh ticket or the public view): statement `{ id: attestationId, attestor, evidence, level, role, conflictDeclared, date, commit, nonce }`, `jws` with `typ` `sanad-attestation+jws`. Request body `{ attestationId, statement, jws }`. `date` must not be before the evidence date and must not be after the provider's current day: take `serverDay` from a ticket or `/v1/info` fetched at the time of the reveal, not the device's own clock, to avoid `bad_date` across a day boundary or a skewed clock.
+
+**Browser helper contract.** A client needs only WebCrypto Ed25519, SHA-256, base64url and the canonical JSON of section 3, with no dependency and no network of its own. `engine/static/sanad-client.js` is the model and exports `newAttestor()` (a key pair made in the page; `{ did, kid, sign(typ, payload) }`), `prepareCommit({ attestor, ticket | assessment, attestationId?, level | native, levelMap?, nonce? })` returning `{ request, secret }`, `prepareReveal({ attestor, ticket | assessment, attestationId?, secret, date, conflictDeclared? })` returning the reveal body, and `canonical`, `sha256Hex`, `newNonce`. The Node helpers of `attestor.mjs` have the same shapes. A host may reimplement the contract in another language; the engine vectors and `test/client.test.mjs` show the exact bytes expected. A host page must keep the key in memory or in the platform's own key store, never post it, and show the attestor what is being signed.
+
+**`levelMap` (decision, item 17 of section 14).** `levelMap` is an optional template member mapping a host-native mark label (1 to 16 letters or digits, for example `g1` to `g6`) to a Sanad level 0 to 5. It is a convention that keeps the host's scale and Sanad's level from drifting apart, and it is not applied to any stored mark by the engine. If the host wants the native mark preserved, the attestor writes it into the nonce as `nm-<native>-<random>` (random part at least 16 characters): the nonce is hashed into the commit and revealed only at the reveal, so **the blind commit is unchanged** and the native mark becomes part of the attestation (and so of the bundle hash and the credential). At the reveal, if the template has a `levelMap` and the nonce carries a native mark, the engine requires it to be listed (`native_unknown`) and to map to the revealed level (`native_mismatch`). A nonce without the `nm-` form is accepted as before; a template without a `levelMap` leaves the nonce uninterpreted. The helpers `levelFromNative`, `nonceWithNative` and `nativeOfNonce` (engine) and the `native` option of `prepareCommit` (engine and browser helper) implement this. Native marks are never sent in the clear before the reveal, and the engine never maps a mark on its own. Removing `levelMap` instead would have left every host to invent its own convention, with the risk that a native mark is sent beside the commit and so weakens blindness.
+
+**Recognition preview** (`POST /v1/assessments/:id/preview`, library `engine.previewRecognition(id, { policy? })`) is a read-only computation that changes nothing and is not a credential. It runs the recognition function over the attestations **revealed so far** only; a commit holds no readable mark, and unrevealed marks are neither read nor counted: only the number still pending is returned. It uses the verifier's `policy` if given (`policySource: "verifier-supplied"`) and otherwise the template's recommendation (`"template-recommendation"`). The result is `{ preview: true, provisional: true, state, policySource, counts: { invited, committed, revealed, pending, notCommitted }, recognition, note }` and is always labelled provisional. It can differ from the final result as soon as another attestor reveals. Revealed marks are public once the reveal phase opens, so the preview discloses nothing that the public view does not already show.
+
+**Invitation removal** (`POST /v1/assessments/:id/invitations/:att/remove`, library `engine.removeInvitation(id, attestationId, { reason? })`, operator only). Allowed only while the assessment is open and only before that attestor's first commit (`409 already_committed` after; `409 state` after finalize; `404 not_invited` if unknown or already removed). It deletes the invitation, keeps a record under `removed` in the public view, appends `{ type: "invitation-removed", assessment, attestationId, attestor, at, reason? }` to the `events` stream, and never reuses the attestation id (the next invitation takes the next number, so a ticket or a signature made for a removed id cannot be replayed against a new invitee). If everyone who remains has committed, the reveal phase opens at once. When the assessment is finalized the credential's `sanad.process` gains `removed: [attestation ids]`, present only if something was removed; a verifier sees it, and a credential without removals has the six members it always had. Removal is an operator power over who sits, not over any mark, and it is visible. Verifiers decide what a visible removal means for them.
+
+**Provider time.** `/v1/info` and `engine.info()` carry `time` and `today`; tickets carry `serverTime` and `serverDay`. Deadlines, key validity on `date` and the "not after the reveal day" rule all use the provider's clock.
 
 ## 9. CLI
 
@@ -157,7 +206,7 @@ The validator refuses unknown members, levels outside 0..5, a live-sitting templ
 
 A host service keeps its own workflow (bookings, payments, rooms) and calls the library: `createEngine({ store, issuer: { did, kid, sign }, log, resolver, clock })`, then `registerTemplate`, `createAssessment`, `invite`, `commit`, `reveal`, `finalize`, `verifyCredential`, `stats`. It may share its SQLite database through the `sqlite` adapter with a table prefix. For portability the host **vendors** `engine/dist/sanad-engine.mjs` (one file, no dependencies) and records its SHA-256 and the source commit; a test in the host checks the hash. A path dependency on a local checkout is not portable and is not used.
 
-An example host, to show how a platform maps its own concepts (the engine does not know this host and gives it no special status; any platform is one host among many): an examiner's device key is the attestor key (`did:key` of the raw public key); the browser signs the commit and the attestation; a committee's sitting is one `sitting` evidence item; the credential is issued when the host's registrar releases the result and is handed to the candidate by the host. If the host grades 1 to 6 while Sanad levels run 0 to 5, the mapping belongs to the host and to the template's optional `levelMap`; the host may bind its native mark into the nonce (for example `h1-<native level>-<random>`, within the nonce alphabet `[A-Za-z0-9_-]`) so that the two cannot drift apart. Choosing the mapping is the host's decision. `docs/INTEGRATION-TUTORIAL.md` walks through three modes (vendored library, sidecar HTTP service, verify-only) with a runnable toy host.
+An example host, to show how a platform maps its own concepts (the engine does not know this host and gives it no special status; any platform is one host among many): an examiner's device key is the attestor key (`did:key` of the raw public key); the browser signs the commit and the attestation; a committee's sitting is one `sitting` evidence item; the credential is issued when the host's registrar releases the result and is handed to the candidate by the host. If the host grades 1 to 6 while Sanad levels run 0 to 5, the mapping belongs to the host and to the template's optional `levelMap`; the host may bind its native mark into the nonce (for example `h1-<native level>-<random>`, within the nonce alphabet `[A-Za-z0-9_-]`) so that the two cannot drift apart. Choosing the mapping is the host's decision. `docs/TUTORIAL-plug-sanad-into-any-system.md` walks through three modes (vendored library, sidecar HTTP service, verify-only) with a runnable toy host.
 
 ## 13. Test plan
 
@@ -181,3 +230,9 @@ The 20 core vectors pass unchanged (`node reference/verify.mjs`). New engine vec
 14. **Bundle hash record.** `engine/build.mjs` writes `dist/sanad-engine.mjs.sha256`; a test compares the committed bundle with a fresh build and the record with the file. The bundle includes the HTTP server and the demonstration helper (`demo`); the CLI is not in the bundle.
 15. **Engine vectors are regression vectors.** They are generated by `vectors/generate.mjs` from this implementation and reviewed by hand; they are not an independent check, because no second implementation exists. They pin bundle hashes, log roots and refusal codes, so that a change in behaviour is visible.
 16. **CLI scope.** Operator commands act on a data directory (single process: not while `serve` runs on the same directory). Attestor commands (`commit`, `reveal`) keep the level and nonce in `<keyfile>.secrets.json` (mode 0600) next to the attestor's key; with `--url` they talk to a running server and send only signed statements.
+17. **`levelMap` is kept and given a meaning** (details in section 8a): host-native label to level, carried hidden in the nonce as `nm-<native>-<random>`, checked at the reveal, never applied to a stored mark. Template keys are now restricted to 1 to 16 letters or digits (a template whose `levelMap` has other keys, such as `native-1`, is refused; no earlier release published such templates).
+18. **Provider time** is part of `info()` and the ticket.
+19. **Recognition preview** exists, over revealed attestations only, always marked provisional, under the verifier's policy or the template's labelled recommendation.
+20. **Invitation removal** exists before the first commit, with a never-reused attestation id, an `events` record and an optional `process.removed` member in the credential. The credential shape check accepts the process object with or without `removed`, so credentials issued earlier still verify. The log has no leaf kind for removals (the log format is unchanged).
+21. **Public method name `ticketFor`** (not `signingTicket`): the principle test refuses any engine method whose name contains `key`, `sign` or `secret`, so that no method can suggest that the engine signs or holds secrets.
+22. **HTTP bodies are now documented in full** in section 8, including the rate-limit statement (none), the body limit and the timeouts.

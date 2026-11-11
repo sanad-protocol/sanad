@@ -21,6 +21,13 @@
 - Single-file bundle `dist/sanad-engine.mjs` with recorded SHA-256; type declarations.
 - Integration tutorial (library, sidecar, verify-only); principle-regression tests.
 - Subjects must be pseudonymous URNs (`bad_subject` otherwise).
+- Signing ticket for browser attestors (`GET /v1/assessments/:id/ticket/:att`, `engine.ticketFor`); helpers accept a ticket.
+- `levelMap` defined: host-native mark to level, carried in the nonce (`nm-<native>-<random>`), checked at the reveal; blind commit unchanged. Keys restricted to letters and digits.
+- Provider time in `info()` (`time`, `today`).
+- Recognition preview over revealed attestations only (`POST /v1/assessments/:id/preview`).
+- Invitation removal before the first commit (`process.removed` in the credential when used).
+- HTTP request and response bodies documented in full; port and adapter example and contract suite; three more engine vectors.
+- Public tutorial `docs/TUTORIAL-plug-sanad-into-any-system.md`.
 - HTTP API, command-line tool `sanad-engine` and a demonstration page.
 - Three example assessments (mathematics oral examination, software testing portfolio, practical welding test) and a toy host.
 - Six deterministic engine vectors in `engine/vectors/`.

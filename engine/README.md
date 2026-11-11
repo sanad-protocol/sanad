@@ -21,7 +21,7 @@ The engine has had no external cryptographic review and no independent implement
 
 ## Use it
 
-Three ways to plug it into a system (details and a worked example in [`docs/INTEGRATION-TUTORIAL.md`](docs/INTEGRATION-TUTORIAL.md)):
+Three ways to plug it into a system (details and a worked example in [`../docs/TUTORIAL-plug-sanad-into-any-system.md`](../docs/TUTORIAL-plug-sanad-into-any-system.md)):
 
 1. **Library, vendored.** Copy `dist/sanad-engine.mjs` (one file, no dependencies) into the host, record its SHA-256 (`dist/sanad-engine.mjs.sha256`) and the source commit, and `import { createEngine } from './vendor/sanad-engine.mjs'`.
 2. **Sidecar HTTP service.** `node bin/sanad-engine init --dir data && node bin/sanad-engine serve --dir data`. The host talks JSON to it (`DESIGN.md` section 8).
@@ -46,7 +46,8 @@ node engine/bin/sanad-engine help
 | `static/` | Demonstration page (strict CSP, no external code; the attestor key is made and kept in the page) |
 | `examples/` | Three templates with scripted runs, and a toy host |
 | `vectors/` | Deterministic `engine-*.json` vectors |
-| `docs/INTEGRATION-TUTORIAL.md` | How to plug Sanad into any system |
+| `../docs/TUTORIAL-plug-sanad-into-any-system.md` | How to plug Sanad into any system |
+| `examples/host-port.mjs` | The port/adapter module a host writes (embedded or HTTP provider chosen by configuration) |
 | `DESIGN.md` | Design, formats, security considerations, open points |
 
 The core recognition function and its 20 conformance vectors live in `../reference/`.

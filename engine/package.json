@@ -12,7 +12,7 @@
     "./package.json": "./package.json"
   },
   "bin": { "sanad-engine": "./bin/sanad-engine" },
-  "files": ["src/", "dist/", "static/", "examples/", "vectors/", "bin/", "docs/", "index.d.ts", "DESIGN.md", "README.md"],
+  "files": ["src/", "dist/", "static/", "examples/", "vectors/", "bin/", "index.d.ts", "DESIGN.md", "README.md"],
   "engines": { "node": ">=22" },
   "repository": { "type": "git", "url": "https://github.com/sanad-protocol/sanad.git", "directory": "engine" },
   "sideEffects": false

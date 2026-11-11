@@ -132,6 +132,10 @@ Ein `did:key` kann nicht gewechselt werden; ein verlorener oder kompromittierter
 - Es gibt noch keine Bestätigenden außerhalb des Umfelds der verantwortlichen Person.
 - Sie ist keine Blockchain, hat kein Token und ist keine Akkreditierung.
 
+## Anbindung an ein System
+
+Eine Plattform behält ihre eigenen Abläufe und lässt genau ein Modul mit der Engine sprechen. Es gibt drei Wege: die Einzeldatei-Bibliothek in der Plattform, einen HTTP-Dienst an der Seite oder nur die Prüfung. Die Anleitung [Plug Sanad into any system](https://github.com/sanad-protocol/sanad/blob/main/docs/TUTORIAL-plug-sanad-into-any-system.md) (englisch) führt durch alle drei, mit Port-und-Adapter-Muster, Signaturticket für Bestätigende im Browser, Abbildung von Stufen, Fristen, dem, was eine Plattform aufbewahren muss (Schlüsselsicherungen und Prüfpunkte des Protokolls), dem, was sie nicht tun darf, Fehlerfällen und einer Checkliste, ob eine Anbindung dem Protokoll treu ist. Was noch nicht getestet ist, ist im Text gekennzeichnet.
+
 ## Offene Punkte
 
 Das Designdokument der Engine nennt zehn Stellen, an denen Spezifikationstext und Referenzcode voneinander abweichen oder eine Frage offen lassen. Die Spezifikation wird nicht geändert; die Engine folgt dem Referenzcode und den Vektoren. Kurz gefasst betrifft das: die Form des Commit-Hashs; Feldnamen in Bestätigungen und Belegen; was der Beleg-Hash abdeckt; die Länge eines Monats; was die Signatur der Bestätigenden abdeckt; den Umgang mit einer fehlgeschlagenen Signatur unter R1; die Definition des Bündel-Hashs; welchen Median die Übereinstimmungsstatistik verwendet; wie ein Nachweis gesichert wird; und welche Ereignisse protokolliert werden. Die vollständige Liste (englisch) steht im [Designdokument](https://github.com/sanad-protocol/sanad/blob/main/engine/DESIGN.md).

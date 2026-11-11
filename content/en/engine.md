@@ -132,6 +132,10 @@ A `did:key` cannot rotate; a lost or compromised `did:key` is replaced by a new 
 - There are no attestors outside the steward's circle yet.
 - It is not a blockchain, has no token, and is not accreditation.
 
+## Plugging it into a system
+
+A platform keeps its own workflow and lets one module talk to the engine. There are three ways to connect: the single-file library vendored into the host, a sidecar HTTP service, or verification only. The tutorial [Plug Sanad into any system](https://github.com/sanad-protocol/sanad/blob/main/docs/TUTORIAL-plug-sanad-into-any-system.md) walks through each, with a port and adapter pattern, the signing ticket for browser attestors, level mapping, deadlines, what a host must keep (key backups and log checkpoints), what a host must not do, failure cases and a checklist for judging whether an integration is faithful to Sanad. The parts that are not yet tested are marked in the text.
+
 ## Open points
 
 The design document lists ten places where the specification text and the reference code differ or leave a question open. The specification is not edited; the engine follows the reference code and the vectors. In summary: the form of the commit hash; field names in attestations and evidence; what the evidence hash covers; the length of a month; what an attestor signature covers; how a failed signature is treated under R1; the definition of the bundle hash; which median the agreement statistic uses; how a credential is secured; and which events are logged. Read the full list in the [design document](https://github.com/sanad-protocol/sanad/blob/main/engine/DESIGN.md).
