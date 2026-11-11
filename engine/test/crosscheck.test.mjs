@@ -41,3 +41,31 @@ describe.skipIf(!have)('independent Python verifier (stdlib only)', () => {
   });
   process.on('exit', () => rmSync(dir, { recursive: true, force: true }));
 });
+
+const rb = spawnSync('ruby', ['--version'], { encoding: 'utf8' });
+const rubyScript = fileURLToPath(new URL('./crosscheck/sanad_verify.rb', import.meta.url));
+const runRb = (doc, asOf = '2026-03-03') => { const f = join(dir, 'r.json'); writeFileSync(f, JSON.stringify(doc)); return spawnSync('ruby', [rubyScript, f, asOf, '36'], { encoding: 'utf8' }); };
+
+describe.skipIf(rb.status !== 0)('independent Ruby verifier (standard library only)', () => {
+  it('its own Ed25519 and canonical JSON agree with the RFC 8032 vector and ECMAScript number formatting', () => {
+    const out = spawnSync('ruby', [rubyScript, '--selftest'], { encoding: 'utf8' }).stdout;
+    expect(out).toMatch(/RFC8032 vector1: \[true/); expect(out).toMatch(/"a":\[1e\+21,1e-7,100,0\.000001,123456789012345680000,0,/);
+  });
+  for (const name of Object.keys(SCENARIOS)) {
+    it(name + ': every check passes in the Ruby implementation and its status and level agree', () => {
+      const r = runExample(name);
+      const out = runRb(r.credential);
+      expect(out.stdout.split('\n').filter((l) => l.startsWith('FAIL'))).toEqual([]);
+      expect(out.stdout).toMatch(/OVERALL: PASS/);
+      const m = /RECOGNITION: status=([a-z-]+) level=(\d)/.exec(out.stdout);
+      const pol = { minAttestors: 2, requireLive: true, halfLifeMonths: 36, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.7, asOf: '2026-03-03' };
+      const mine = r.engine.verifyCredential(r.credential, { policy: pol }).recognition;
+      expect([m[1], Number(m[2])]).toEqual([mine.status, mine.level]);
+    });
+  }
+  it('a tampered credential fails in Ruby too', () => {
+    const r = runExample('maths-oral'); const bad = JSON.parse(JSON.stringify(r.credential)); bad.sanad.bundle.attestations[0].level = 5;
+    expect(runRb(bad).stdout).toMatch(/OVERALL: FAIL/);
+  });
+});
+

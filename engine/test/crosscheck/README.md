@@ -18,3 +18,15 @@ What it shows, and does not show:
 - It resolves did:key identities only.
 
 `engine/test/crosscheck.test.mjs` runs it on credentials made by the example runs whenever `python3` is available.
+
+## The Ruby verifier
+
+`sanad_verify.rb` is a second independent verifier, written in Ruby (standard library only) from the same documents. It has its own Ed25519, canonical JSON, RFC 9162 check and recognition function, and additionally checks that commit leaves can be reconstructed from the credential and that every commit leaf precedes the first attestation leaf.
+
+```
+ruby engine/test/crosscheck/sanad_verify.rb credential.json 2026-03-03 36     # credential, evaluation day, half-life in months
+ruby engine/test/crosscheck/sanad_verify.rb --selftest
+```
+
+It uses the core's month length (30.4375 days); set `MONTH=30.436875` to see the specification text's value. It resolves `did:key` identities, and a `did:web` key only if given `PINNED_DIDWEB_KEY`. `engine/test/crosscheck.test.mjs` runs it when `ruby` is available. Like the Python verifier it is not a cryptographic review.
+
