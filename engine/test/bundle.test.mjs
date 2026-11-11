@@ -23,11 +23,22 @@ describe('single-file bundle', () => {
     const bundle = await import(pathToFileURL(OUT).href);
     expect(Object.keys(bundle).sort()).toEqual(Object.keys(lib).sort());
   });
-  it('declares what it exports in index.d.ts', async () => {
+  it('index.d.ts declares every runtime export, and nothing that does not exist', async () => {
     const d = readFileSync(fileURLToPath(new URL('../index.d.ts', import.meta.url)), 'utf8');
     const lib = await import('../src/index.mjs');
-    const declared = new Set([...d.matchAll(/export (?:declare )?(?:function|const|class) (\w+)/g)].map((m) => m[1]));
-    for (const n of declared) expect(n in lib, n).toBe(true);
-    for (const n of ['createEngine', 'createHttpServer', 'verifyCredential', 'prepareCommit', 'prepareReveal', 'EngineError']) expect(declared.has(n), n).toBe(true);
+    const declared = new Set([...d.matchAll(/export (?:declare )?(?:async )?(?:function|const|class) (\w+)/g)].map((m) => m[1]));
+    const undeclared = Object.keys(lib).filter((n) => !declared.has(n));
+    expect(undeclared, 'exports missing from index.d.ts').toEqual([]);
+    const ghosts = [...declared].filter((n) => !(n in lib));
+    expect(ghosts, 'declared but not exported').toEqual([]);
+  });
+  it('declares the engine methods and verify options that exist', async () => {
+    const d = readFileSync(fileURLToPath(new URL('../index.d.ts', import.meta.url)), 'utf8');
+    const { createEngine, createMemoryStore, makeSigner, keyPairFromSeed } = await import('../src/index.mjs');
+    const e = createEngine({ store: createMemoryStore(), issuer: makeSigner(keyPairFromSeed(new Uint8Array(32).fill(1)).privateKey), logSigner: makeSigner(keyPairFromSeed(new Uint8Array(32).fill(2)).privateKey) });
+    const iface = d.slice(d.indexOf('export interface Engine {'), d.indexOf('export function createEngine'));
+    for (const k of Object.keys(e)) expect(iface, 'Engine.' + k).toMatch(new RegExp('\\b' + k + '[(:]'));
+    for (const o of ['policy', 'useRecommendedPolicy', 'asOf', 'useVerifierClock', 'trustedIssuers', 'trustedLogKeys', 'trustedLogIds', 'pinnedKeys', 'trustedDidHistories', 'allowUnpinned', 'allowEmbeddedDids', 'attestorStats', 'allowIssuerStatistics', 'allowedAttestors', 'template']) expect(d, o).toMatch(new RegExp('\\b' + o + '\\??:'));
+    expect(d).not.toMatch(/Partial</);
   });
 });
