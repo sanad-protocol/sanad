@@ -182,7 +182,7 @@ describe('enforcement at finalize (template minimum and live sitting)', () => {
   it('a single attestor cannot finalize a min:2 template unless the operator says so, and the shortfall is recorded', () => {
     const s = H.setup(); H.newAssessment(s.engine);
     const i = s.engine.invite('as-1', { attestor: s.people.A.did, role: 'examiner', evidence: 'E1' });
-    const c = H.commitAs(s.engine, s.people.A, 'as-1', i.attestationId, 4).secret; H.revealAs(s.engine, s.people.A, 'as-1', c);
+    const c = H.commitAs(s.engine, s.people.A, 'as-1', i.attestationId, 4).secret; s.engine.closeInvitations('as-1'); H.revealAs(s.engine, s.people.A, 'as-1', c);
     H.code(() => s.engine.finalize('as-1'), 'below_template_minimum');
     const doc = s.engine.finalize('as-1', { allowShortfall: true });
     expect(doc.sanad.process.shortfall).toEqual([expect.stringMatching(/as-1\.E1.*1.*2/)]);

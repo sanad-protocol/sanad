@@ -191,7 +191,7 @@ function checkVersion(v, { expectRevokedEmpty }) {
   if (!isObj(v) || !exactly(v, ['keys', 'revoked', 'validFrom', 'version'])) throw new Error('a version has exactly version, validFrom, keys, revoked');
   if (!Number.isInteger(v.version) || v.version < 1) throw new Error('version must be a positive integer');
   if (!isIsoDate(v.validFrom)) throw new Error('validFrom must be YYYY-MM-DD');
-  if (!Array.isArray(v.keys) || v.keys.length === 0) throw new Error('keys must be a non-empty array');
+  if (!Array.isArray(v.keys) || v.keys.length === 0 || v.keys.length > DID_LIMITS.keys) throw new Error('keys must be a non-empty array of at most ' + DID_LIMITS.keys);
   const ids = new Set();
   for (const k of v.keys) {
     if (!isObj(k) || !exactly(k, ['id', 'publicKeyMultibase'])) throw new Error('a key has exactly id and publicKeyMultibase');
@@ -199,7 +199,7 @@ function checkVersion(v, { expectRevokedEmpty }) {
     if (ids.has(k.id)) throw new Error('duplicate key id');
     ids.add(k.id); rawFromMultibase(k.publicKeyMultibase);
   }
-  if (!Array.isArray(v.revoked)) throw new Error('revoked must be an array');
+  if (!Array.isArray(v.revoked) || v.revoked.length > DID_LIMITS.revoked) throw new Error('revoked must be an array of at most ' + DID_LIMITS.revoked);
   if (expectRevokedEmpty && v.revoked.length) throw new Error('version 1 has no revocations');
   for (const r of v.revoked) {
     if (!isObj(r) || !exactly(r, ['from', 'id'])) throw new Error('a revocation has exactly id and from');
@@ -208,6 +208,8 @@ function checkVersion(v, { expectRevokedEmpty }) {
 }
 
 export const DID_UPDATE_TYP = 'sanad-did-update+jws';
+/** Normative verification limits for one DID history (a verifier may refuse more): versions per history, keys and revocations per version. */
+export const DID_LIMITS = { versions: 16, keys: 8, revoked: 16 };
 
 /**
  * A resolver for signer keys. did:key resolves by itself; any other DID needs a registered history.
@@ -215,9 +217,10 @@ export const DID_UPDATE_TYP = 'sanad-did-update+jws';
  */
 export function createResolver({ store } = {}) {
   const mem = new Map();
-  const load = (did) => {
+  // `copy: false` is for read-only internal use (verification); public reads always return a copy
+  const load = (did, copy = true) => {
     const v = store ? store.get('dids', did) : mem.get(did);
-    return v ? clone(v) : null;
+    return v ? (copy ? clone(v) : v) : null;
   };
   const save = (did, doc) => { if (store) store.put('dids', did, doc); else mem.set(did, clone(doc)); };
 
@@ -243,6 +246,7 @@ export function createResolver({ store } = {}) {
       if (!hist) throw new EngineError('did_unknown', 'DID not registered: ' + did, 404);
       const bad = (m) => new EngineError('bad_did_update', m, 400);
       try { checkVersion(version, { expectRevokedEmpty: false }); } catch (e) { throw bad(e.message); }
+      if (hist.versions.length >= DID_LIMITS.versions) throw bad('a history holds at most ' + DID_LIMITS.versions + ' versions');
       const last = hist.versions[hist.versions.length - 1];
       if (version.version !== last.version + 1) throw bad('version must be ' + (last.version + 1));
       if (version.validFrom < last.validFrom) throw bad('validFrom must not be before the previous version');
@@ -258,7 +262,7 @@ export function createResolver({ store } = {}) {
         try { return [{ kid: kidForDidKey(did), publicKey: publicKeyFromDidKey(did) }]; } catch { return []; }
       }
       if (!isIsoDate(date)) return [];
-      const hist = load(did);
+      const hist = load(did, false);
       if (!hist) return [];
       let inForce = null;
       for (const v of hist.versions) if (v.validFrom <= date) inForce = v;
@@ -268,6 +272,24 @@ export function createResolver({ store } = {}) {
       return inForce.keys.filter((k) => !revoked.has(k.id)).map((k) => ({ kid: did + k.id, publicKey: rawFromMultibase(k.publicKeyMultibase) }));
     },
 
+    /** The one key named by `kid` that is valid on `date`, decoded alone (no work for the other keys of the version). */
+    keyAt(did, kid, date) {
+      if (typeof did === 'string' && did.startsWith(DID_KEY)) {
+        try { return kid === kidForDidKey(did) ? { kid, publicKey: publicKeyFromDidKey(did) } : null; } catch { return null; }
+      }
+      if (!isIsoDate(date) || typeof kid !== 'string' || !kid.startsWith(did + '#')) return null;
+      const hist = load(did, false);
+      if (!hist) return null;
+      let inForce = null;
+      for (const v of hist.versions) if (v.validFrom <= date) inForce = v;
+      if (!inForce) return null;
+      const frag = kid.slice(did.length);
+      const entry = inForce.keys.find((k) => k.id === frag);
+      if (!entry) return null;
+      for (const v of hist.versions) for (const r of v.revoked) if (r.id === frag && r.from <= date) return null;
+      try { return { kid, publicKey: rawFromMultibase(entry.publicKeyMultibase) }; } catch { return null; }
+    },
+
     verifyStatement({ jws, payload, typ, signer, date }) {
       let parsed;
       try { parsed = parseJws(jws); } catch { return { ok: false, reason: 'bad_jws' }; }
@@ -275,10 +297,10 @@ export function createResolver({ store } = {}) {
       if (typeof signer !== 'string' || !header.kid.startsWith(signer + '#')) return { ok: false, reason: 'kid_mismatch' };
       if (header.typ !== typ) return { ok: false, reason: 'wrong_type' };
       let key;
-      try { key = resolver.keysAt(signer, date).find((k) => k.kid === header.kid); } catch { key = undefined; } // a damaged or refused record is "no valid key", never an exception
+      try { key = resolver.keyAt(signer, header.kid, date); } catch { key = null; } // a damaged or refused record is "no valid key", never an exception
       if (!key) return { ok: false, reason: 'key_not_valid' };
       if (!verifyJws({ jws, payload, typ, publicKey: key.publicKey })) return { ok: false, reason: 'bad_signature' };
-      return { ok: true, kid: key.kid };
+      return { ok: true, kid: key.kid, publicKey: key.publicKey };
     },
   };
   return resolver;

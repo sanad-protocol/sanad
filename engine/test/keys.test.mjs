@@ -169,7 +169,7 @@ describe('resolver', () => {
     const s1 = signJws({ typ, kid: DIDW + '#k1', payload: stmt, privateKey: k1.privateKey });
     const s2 = signJws({ typ, kid: DIDW + '#k2', payload: stmt, privateKey: k2.privateKey });
     const vs = (jws, date, t = typ, signer = DIDW) => r.verifyStatement({ jws, payload: stmt, typ: t, signer, date });
-    expect(vs(s1, '2026-03-01')).toEqual({ ok: true, kid: DIDW + '#k1' });
+    expect(vs(s1, '2026-03-01')).toMatchObject({ ok: true, kid: DIDW + '#k1' });
     expect(vs(s1, '2026-06-01')).toEqual({ ok: false, reason: 'key_not_valid' });
     expect(vs(s2, '2026-05-31')).toEqual({ ok: false, reason: 'key_not_valid' });
     expect(vs(s2, '2026-06-02').ok).toBe(true);
@@ -216,7 +216,7 @@ describe('resolver', () => {
     expect(r.keysAt(s.did, '1999-01-01')).toEqual([{ kid: s.kid, publicKey: k1.publicKey }]);
     expect(r.keysAt(s.did, 'whatever').length).toBe(1);
     const p = { x: 1 };
-    expect(r.verifyStatement({ jws: s.sign('t+jws', p), payload: p, typ: 't+jws', signer: s.did, date: '2026-01-01' })).toEqual({ ok: true, kid: s.kid });
+    expect(r.verifyStatement({ jws: s.sign('t+jws', p), payload: p, typ: 't+jws', signer: s.did, date: '2026-01-01' })).toMatchObject({ ok: true, kid: s.kid });
     expect(() => r.register({ id: s.did, versions: [] })).toThrow(expect.objectContaining({ code: 'bad_did_document' }));
   });
   it('uses a store when given', () => {

@@ -182,7 +182,7 @@
           ],
           "notCommitted": [],
           "shortfall": [
-            "as-1.E1: 1 revealed attestor(s), template minimum 2"
+            "as-1.E1: 1 revealed attestor(s) without a declared conflict, template minimum 2"
           ]
         },
         "checksPass": true,

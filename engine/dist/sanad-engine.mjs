@@ -718,7 +718,7 @@ function checkVersion(v, { expectRevokedEmpty }) {
   if (!isObj(v) || !exactly(v, ["keys", "revoked", "validFrom", "version"])) throw new Error("a version has exactly version, validFrom, keys, revoked");
   if (!Number.isInteger(v.version) || v.version < 1) throw new Error("version must be a positive integer");
   if (!isIsoDate(v.validFrom)) throw new Error("validFrom must be YYYY-MM-DD");
-  if (!Array.isArray(v.keys) || v.keys.length === 0) throw new Error("keys must be a non-empty array");
+  if (!Array.isArray(v.keys) || v.keys.length === 0 || v.keys.length > DID_LIMITS.keys) throw new Error("keys must be a non-empty array of at most " + DID_LIMITS.keys);
   const ids = /* @__PURE__ */ new Set();
   for (const k of v.keys) {
     if (!isObj(k) || !exactly(k, ["id", "publicKeyMultibase"])) throw new Error("a key has exactly id and publicKeyMultibase");
@@ -727,7 +727,7 @@ function checkVersion(v, { expectRevokedEmpty }) {
     ids.add(k.id);
     rawFromMultibase(k.publicKeyMultibase);
   }
-  if (!Array.isArray(v.revoked)) throw new Error("revoked must be an array");
+  if (!Array.isArray(v.revoked) || v.revoked.length > DID_LIMITS.revoked) throw new Error("revoked must be an array of at most " + DID_LIMITS.revoked);
   if (expectRevokedEmpty && v.revoked.length) throw new Error("version 1 has no revocations");
   for (const r of v.revoked) {
     if (!isObj(r) || !exactly(r, ["from", "id"])) throw new Error("a revocation has exactly id and from");
@@ -735,11 +735,12 @@ function checkVersion(v, { expectRevokedEmpty }) {
   }
 }
 var DID_UPDATE_TYP = "sanad-did-update+jws";
+var DID_LIMITS = { versions: 16, keys: 8, revoked: 16 };
 function createResolver({ store } = {}) {
   const mem = /* @__PURE__ */ new Map();
-  const load = (did) => {
+  const load = (did, copy = true) => {
     const v = store ? store.get("dids", did) : mem.get(did);
-    return v ? clone(v) : null;
+    return v ? copy ? clone(v) : v : null;
   };
   const save = (did, doc) => {
     if (store) store.put("dids", did, doc);
@@ -775,6 +776,7 @@ function createResolver({ store } = {}) {
       } catch (e) {
         throw bad2(e.message);
       }
+      if (hist.versions.length >= DID_LIMITS.versions) throw bad2("a history holds at most " + DID_LIMITS.versions + " versions");
       const last = hist.versions[hist.versions.length - 1];
       if (version.version !== last.version + 1) throw bad2("version must be " + (last.version + 1));
       if (version.validFrom < last.validFrom) throw bad2("validFrom must not be before the previous version");
@@ -793,7 +795,7 @@ function createResolver({ store } = {}) {
         }
       }
       if (!isIsoDate(date)) return [];
-      const hist = load(did);
+      const hist = load(did, false);
       if (!hist) return [];
       let inForce = null;
       for (const v of hist.versions) if (v.validFrom <= date) inForce = v;
@@ -801,6 +803,31 @@ function createResolver({ store } = {}) {
       const revoked = /* @__PURE__ */ new Set();
       for (const v of hist.versions) for (const r of v.revoked) if (r.from <= date) revoked.add(r.id);
       return inForce.keys.filter((k) => !revoked.has(k.id)).map((k) => ({ kid: did + k.id, publicKey: rawFromMultibase(k.publicKeyMultibase) }));
+    },
+    /** The one key named by `kid` that is valid on `date`, decoded alone (no work for the other keys of the version). */
+    keyAt(did, kid, date) {
+      if (typeof did === "string" && did.startsWith(DID_KEY)) {
+        try {
+          return kid === kidForDidKey(did) ? { kid, publicKey: publicKeyFromDidKey(did) } : null;
+        } catch {
+          return null;
+        }
+      }
+      if (!isIsoDate(date) || typeof kid !== "string" || !kid.startsWith(did + "#")) return null;
+      const hist = load(did, false);
+      if (!hist) return null;
+      let inForce = null;
+      for (const v of hist.versions) if (v.validFrom <= date) inForce = v;
+      if (!inForce) return null;
+      const frag = kid.slice(did.length);
+      const entry = inForce.keys.find((k) => k.id === frag);
+      if (!entry) return null;
+      for (const v of hist.versions) for (const r of v.revoked) if (r.id === frag && r.from <= date) return null;
+      try {
+        return { kid, publicKey: rawFromMultibase(entry.publicKeyMultibase) };
+      } catch {
+        return null;
+      }
     },
     verifyStatement({ jws, payload, typ, signer, date }) {
       let parsed;
@@ -814,13 +841,13 @@ function createResolver({ store } = {}) {
       if (header.typ !== typ) return { ok: false, reason: "wrong_type" };
       let key;
       try {
-        key = resolver.keysAt(signer, date).find((k) => k.kid === header.kid);
+        key = resolver.keyAt(signer, header.kid, date);
       } catch {
-        key = void 0;
+        key = null;
       }
       if (!key) return { ok: false, reason: "key_not_valid" };
       if (!verifyJws({ jws, payload, typ, publicKey: key.publicKey })) return { ok: false, reason: "bad_signature" };
-      return { ok: true, kid: key.kid };
+      return { ok: true, kid: key.kid, publicKey: key.publicKey };
     }
   };
   return resolver;
@@ -1840,8 +1867,8 @@ function buildCredential({ bundle, issuer, template, assessment, process: proces
   const jws = issuer.sign(CREDENTIAL_TYP, clone2(doc));
   return { ...doc, proof: { type: "SanadDetachedJws", verificationMethod: issuer.kid, created: validFrom, jws } };
 }
-var VERIFY_LIMITS = { attestations: 200, evidence: 200, logEntries: 2e3, dids: 100 };
-var NOTICE = "Experimental software: the Sanad engine has not been cryptographically reviewed and no independent implementation checks its output. A passing report records what was signed and logged, not that the attestors were honest.";
+var VERIFY_LIMITS = { attestations: 200, evidence: 200, logEntries: 2e3, dids: 100, versionsPerHistory: DID_LIMITS.versions, keysPerVersion: DID_LIMITS.keys, revokedPerVersion: DID_LIMITS.revoked };
+var NOTICE = "Experimental software: the Sanad engine has not been cryptographically reviewed. A passing report records what was signed and logged, not that the attestors were honest. Backdating with a stolen attestor key, collusion and help off camera are not detected.";
 var PROCESS_BASE = ["invited", "committed", "revealed", "missing", "late", "notCommitted"];
 var processOk = (pr) => isObj4(pr) && PROCESS_BASE.every((k) => k in pr) && Object.keys(pr).every((k) => PROCESS_BASE.includes(k) || k === "removed" || k === "shortfall") && ["removed", "shortfall"].every((k) => !(k in pr) || Array.isArray(pr[k]) && pr[k].every(isStr3));
 var POLICY_KEYS = ["minAttestors", "requireLive", "halfLifeMonths", "minAttestorSittings", "minAgreement", "maxInferenceDepth", "inferenceDecay"];
@@ -1872,7 +1899,20 @@ function shapeProblems(doc) {
   need(processOk(s.process), "sanad.process members");
   need(exactly2(s.policy, ["id", ...POLICY_KEYS]), "sanad.policy members");
   need(Array.isArray(s.dids) && s.dids.every((d) => exactly2(d, ["id", "versions"]) && isStr3(d.id) && Array.isArray(d.versions)), "sanad.dids must be a list of { id, versions }");
-  if (Array.isArray(s.dids) && s.dids.length > VERIFY_LIMITS.dids) p.push("too many DID histories (limit " + VERIFY_LIMITS.dids + ")");
+  if (Array.isArray(s.dids)) {
+    if (s.dids.length > VERIFY_LIMITS.dids) p.push("too many DID histories (limit " + VERIFY_LIMITS.dids + ")");
+    for (const d of s.dids) {
+      if (!isObj4(d) || !Array.isArray(d.versions)) continue;
+      if (d.versions.length > VERIFY_LIMITS.versionsPerHistory) {
+        p.push(`DID history ${String(d.id).slice(0, 60)} has more than ${VERIFY_LIMITS.versionsPerHistory} versions`);
+        continue;
+      }
+      for (const v of d.versions) if (isObj4(v) && (Array.isArray(v.keys) && v.keys.length > VERIFY_LIMITS.keysPerVersion || Array.isArray(v.revoked) && v.revoked.length > VERIFY_LIMITS.revokedPerVersion)) {
+        p.push(`a DID version has more than ${VERIFY_LIMITS.keysPerVersion} keys or ${VERIFY_LIMITS.revokedPerVersion} revocations`);
+        break;
+      }
+    }
+  }
   if (isObj4(s.log) && Array.isArray(s.log.entries) && s.log.entries.length > VERIFY_LIMITS.logEntries) {
     p.push("too many log entries (limit " + VERIFY_LIMITS.logEntries + ")");
     return p;
@@ -1888,7 +1928,7 @@ function shapeProblems(doc) {
     p.push("bundle members must be exactly skill, claimedLevel, subject, evidence, attestations, attestors");
     return p;
   }
-  need(isStr3(b.skill) && isStr3(b.subject) && Number.isInteger(b.claimedLevel), "bundle skill, subject and claimedLevel types");
+  need(isStr3(b.skill) && isStr3(b.subject) && Number.isInteger(b.claimedLevel) && b.claimedLevel >= 0 && b.claimedLevel <= 5, "bundle skill, subject and claimedLevel (an integer from 0 to 5)");
   if (!Array.isArray(b.evidence) || !Array.isArray(b.attestations) || !isObj4(b.attestors)) {
     p.push("bundle evidence and attestations must be lists, attestors an object");
     return p;
@@ -1907,24 +1947,31 @@ function shapeProblems(doc) {
   return p;
 }
 function verifierResolver(given, embeddedDids, trusted) {
-  const known = (list) => {
+  const mapOf = (list) => {
     const m = /* @__PURE__ */ new Map();
     for (const d of Array.isArray(list) ? list : []) if (isObj4(d) && isStr3(d.id)) m.set(d.id, d);
     return m;
   };
-  const emb = createResolver({ store: { get: (c, id) => known(embeddedDids).get(id) ?? null, put() {
+  const embMap = mapOf(embeddedDids), trMap = mapOf(trusted);
+  const emb = createResolver({ store: { get: (c, id) => embMap.get(id) ?? null, put() {
   } } });
-  const tr = createResolver({ store: { get: (c, id) => known(trusted).get(id) ?? null, put() {
+  const tr = createResolver({ store: { get: (c, id) => trMap.get(id) ?? null, put() {
   } } });
   const usedEmbedded = /* @__PURE__ */ new Map();
-  const has2 = (r, did) => {
-    try {
-      return !!(r && typeof r.get === "function" && isStr3(did) && !did.startsWith(DID_KEY2) && r.get(did));
-    } catch {
-      return false;
+  const givenHas = /* @__PURE__ */ new Map();
+  const has2 = (did) => {
+    if (!givenHas.has(did)) {
+      let h = false;
+      try {
+        h = !!(given && typeof given.get === "function" && isStr3(did) && !did.startsWith(DID_KEY2) && given.get(did));
+      } catch {
+        h = false;
+      }
+      givenHas.set(did, h);
     }
+    return givenHas.get(did);
   };
-  const pick = (did) => has2(given, did) ? { r: given, emb: false } : has2(tr, did) ? { r: tr, emb: false } : { r: emb, emb: true };
+  const pick = (did) => has2(did) ? { r: given, emb: false } : trMap.has(did) ? { r: tr, emb: false } : { r: emb, emb: true };
   return {
     usedEmbedded,
     keysAt(did, date) {
@@ -1939,8 +1986,7 @@ function verifierResolver(given, embeddedDids, trusted) {
         const { r, emb: isEmb } = pick(arg.signer);
         const res = r.verifyStatement(arg);
         if (res.ok && isEmb && !String(arg.signer).startsWith(DID_KEY2)) {
-          const key = r.keysAt(arg.signer, arg.date).find((k) => k.kid === res.kid);
-          const mb = key ? "z" + base58btcEncode(key.publicKey) : "?";
+          const mb = res.publicKey ? "z" + base58btcEncode(res.publicKey) : "?";
           if (!usedEmbedded.has(arg.signer)) usedEmbedded.set(arg.signer, /* @__PURE__ */ new Set());
           usedEmbedded.get(arg.signer).add(mb);
         }
@@ -1955,8 +2001,11 @@ var ADD = (checks, name, ok, detail) => checks.push({ name, ok, detail });
 var isoDay = (ms) => new Date(ms).toISOString().slice(0, 10);
 function verifyCredential(doc, opts = {}) {
   const checks = [], warnings = [];
-  let recognition = null, inferred = [], basis = null;
-  const done = () => ({ ok: checks.every((c) => c.ok), checks, recognition, inferred, warnings, basis, notice: NOTICE });
+  let recognition = null, inferred = [], basis = null, unverifiedLabel = false;
+  const done = () => {
+    const ok = checks.every((c) => c.ok);
+    return { ok, checks, recognition: recognition && !ok && unverifiedLabel ? { ...recognition, unverified: true } : recognition, inferred, warnings, basis, notice: NOTICE };
+  };
   try {
     if (!isObj4(doc)) {
       ADD(checks, "shape", false, "the credential must be a JSON object");
@@ -1972,12 +2021,17 @@ function verifyCredential(doc, opts = {}) {
       const { proof } = doc, { proof: _omit, ...body } = doc;
       const r = proof.type === "SanadDetachedJws" ? resolver.verifyStatement({ jws: proof.jws, payload: body, typ: CREDENTIAL_TYP, signer: doc.issuer, date: day }) : { ok: false, reason: "unknown_proof_type" };
       const kidOk = r.ok && r.kid === proof.verificationMethod;
+      const proofOk = r.ok && kidOk && proof.created === doc.validFrom;
       ADD(
         checks,
         "issuer-proof",
-        r.ok && kidOk && proof.created === doc.validFrom,
+        proofOk,
         r.ok ? kidOk ? proof.created === doc.validFrom ? `signed by ${r.kid}, valid on ${day}` : "proof.created differs from validFrom" : "verificationMethod differs from the signing key" : "issuer signature refused: " + r.reason
       );
+      if (!proofOk && opts.diagnose !== true) {
+        warnings.push("verification stopped at the failed issuer proof; pass diagnose to examine the rest");
+        return done();
+      }
     }
     {
       const h = bundleHashOf(bundle), ref = doc.evidence[0];
@@ -1997,9 +2051,13 @@ function verifyCredential(doc, opts = {}) {
       const bad2 = [...bundle.evidence.map((e) => e.id), ...bundle.attestations.map((a) => a.id)].filter((id) => !id.startsWith(pre));
       ADD(checks, "ids", bad2.length === 0, bad2.length ? `ids outside assessment ${sanad.assessment}: ${bad2.slice(0, 5).join(", ")}` : "every evidence and attestation id belongs to assessment " + sanad.assessment);
     }
+    const sigCache = /* @__PURE__ */ new Map();
     const sigReason = (a) => {
+      if (sigCache.has(a.id)) return sigCache.get(a.id);
       const { prev: _p, ...stmt } = attestationPayload(a);
-      return resolver.verifyStatement({ jws: a.signature, payload: stmt, typ: ATTESTATION_TYP, signer: a.attestor, date: a.date });
+      const r = resolver.verifyStatement({ jws: a.signature, payload: stmt, typ: ATTESTATION_TYP, signer: a.attestor, date: a.date });
+      sigCache.set(a.id, r);
+      return r;
     };
     {
       const bad2 = [];
@@ -2067,6 +2125,17 @@ function verifyCredential(doc, opts = {}) {
         ADD(checks, "did-histories", bad2.length === 0, bad2.length ? "keys known only from histories embedded in the credential and not pinned by the verifier: " + bad2.join(", ") : "every did:web key used is pinned by the verifier");
       }
     }
+    {
+      const pr = sanad.process, n = bundle.attestations.length, why = [];
+      if (pr.revealed !== n) why.push(`process.revealed is ${pr.revealed} but the bundle has ${n} attestation(s)`);
+      if (pr.committed < pr.revealed || pr.committed > pr.invited) why.push("process counts are inconsistent (revealed <= committed <= invited must hold)");
+      if (pr.missing.length !== pr.committed - pr.revealed) why.push("process.missing does not account for committed minus revealed");
+      if (pr.notCommitted.length !== pr.invited - pr.committed) why.push("process.notCommitted does not account for invited minus committed");
+      if (pr.late.some((id) => !pr.missing.includes(id))) why.push("process.late names an attestation that is not missing");
+      const have = new Set(bundle.attestations.map((a) => a.id));
+      if (pr.missing.some((id) => have.has(id))) why.push("process.missing names an attestation that is in the bundle");
+      ADD(checks, "process", why.length === 0, why.length ? why.join("; ") : "process counts agree with the bundle");
+    }
     if (opts.template !== void 0) {
       const why = [];
       try {
@@ -2077,6 +2146,14 @@ function verifyCredential(doc, opts = {}) {
         for (const a of bundle.attestations) if (!roles.includes(a.role)) why.push(`attestation ${a.id} has role "${a.role}", which the template does not list`);
         const kinds = new Map((t.evidence ?? []).map((e) => [sanad.assessment + "." + e.key, e.kind]));
         for (const e of bundle.evidence) if (kinds.get(e.id) !== e.kind) why.push(`evidence ${e.id} is not an item of kind ${e.kind} of the template`);
+        const have = new Set(bundle.evidence.map((e) => e.id));
+        for (const id of kinds.keys()) if (!have.has(id)) why.push(`the template's evidence item ${id} is missing from the credential`);
+        const short = [];
+        const per = new Map(bundle.evidence.map((e) => [e.id, /* @__PURE__ */ new Set()]));
+        for (const a of bundle.attestations) if (!a.conflictDeclared) per.get(a.evidence)?.add(a.attestor);
+        for (const e of bundle.evidence) if (e.kind !== "auto" && per.get(e.id).size < (t.attestors?.min ?? 1)) short.push(e.id);
+        if (t.liveSitting && !bundle.evidence.some((e) => e.kind === "sitting" && per.get(e.id).size > 0)) short.push("liveSitting");
+        if (short.length && !(Array.isArray(sanad.process.shortfall) && sanad.process.shortfall.length)) why.push("below the template minimum (" + short.join(", ") + ") and the credential records no process.shortfall");
       } catch {
         why.push("the supplied template is not usable");
       }
@@ -2125,6 +2202,7 @@ function verifyCredential(doc, opts = {}) {
           const ropts = { verifySignature: (a) => sigReason(a).ok };
           if (Array.isArray(opts.allowedAttestors)) ropts.allowAttestor = (d) => opts.allowedAttestors.includes(d);
           recognition = recognise(cred, pol, ropts);
+          unverifiedLabel = true;
           if (opts.graph && recognition.status !== "not-recognised") inferred = infer(opts.graph, bundle.skill, recognition.level, recognition.confidence, pol, [bundle.skill]);
         } catch (e) {
           ADD(checks, "recognition", false, "the recognition function refused the input: " + (e?.message ?? e));
@@ -2947,6 +3025,7 @@ export {
   BODY_LIMIT,
   CREDENTIAL_TYP,
   CSP,
+  DID_LIMITS,
   DID_UPDATE_TYP,
   EngineError,
   MAX_DEPTH,

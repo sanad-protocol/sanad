@@ -32,6 +32,8 @@ export function parseJws(jws: string): { header: { alg: string; kid: string; typ
 export function verifyJws(a: { jws: string; payload: unknown; typ: string; publicKey: Uint8Array }): boolean;
 export function isIsoDate(s: unknown): boolean;
 export const DID_UPDATE_TYP: 'sanad-did-update+jws';
+/** Normative limits for one DID history: versions per history, keys and revocations per version. */
+export const DID_LIMITS: { versions: number; keys: number; revoked: number };
 export interface DidVersion { version: number; validFrom: string; keys: { id: string; publicKeyMultibase: string }[]; revoked: { id: string; from: string }[]; }
 export interface DidHistory { id: string; versions: DidVersion[]; }
 export interface Resolver {
@@ -39,7 +41,8 @@ export interface Resolver {
   register(doc: DidHistory): DidHistory;
   update(did: string, version: DidVersion, jws: string): DidHistory;
   keysAt(did: string, date: string): { kid: string; publicKey: Uint8Array }[];
-  verifyStatement(a: { jws: string; payload: unknown; typ: string; signer: string; date: string }): { ok: true; kid: string } | { ok: false; reason: string };
+  keyAt(did: string, kid: string, date: string): { kid: string; publicKey: Uint8Array } | null;
+  verifyStatement(a: { jws: string; payload: unknown; typ: string; signer: string; date: string }): { ok: true; kid: string; publicKey: Uint8Array } | { ok: false; reason: string };
 }
 export function createResolver(opts?: { store?: Pick<Store, 'get' | 'put'> }): Resolver;
 
@@ -127,7 +130,9 @@ export interface Credential {
 }
 export interface Check { name: string; ok: boolean; detail: string; }
 export interface VerifyReport {
-  ok: boolean; checks: Check[]; recognition: Core.Recognition | null; inferred: any[]; warnings: string[];
+  ok: boolean; checks: Check[];
+  /** When `ok` is false and a recognition is present it carries `unverified: true`: it is what the data would give if it were genuine. */
+  recognition: (Core.Recognition & { unverified?: true }) | null; inferred: any[]; warnings: string[];
   basis: { policySource: 'verifier' | 'issuer-recommendation'; asOfSource: 'policy' | 'option' | 'verifier-clock' | 'credential-date' } | null;
   /** The experimental-software notice, repeated in every report. */
   notice: string;
@@ -155,10 +160,12 @@ export interface VerifyOptions {
   allowIssuerStatistics?: boolean;
   allowedAttestors?: string[];
   template?: Template;
+  /** Examine the rest of a document whose issuer proof failed (by default verification stops there). */
+  diagnose?: boolean;
   graph?: { requires(id: string): readonly string[] };
 }
 export function verifyCredential(doc: unknown, opts?: VerifyOptions): VerifyReport;
-export const VERIFY_LIMITS: { attestations: number; evidence: number; logEntries: number; dids: number };
+export const VERIFY_LIMITS: { attestations: number; evidence: number; logEntries: number; dids: number; versionsPerHistory: number; keysPerVersion: number; revokedPerVersion: number };
 export const NOTICE: string;
 export const CREDENTIAL_TYP: 'sanad-credential+jws';
 export const ATTESTATION_TYP: 'sanad-attestation+jws';
@@ -180,6 +187,8 @@ export interface Engine {
   updateDid(did: string, version: DidVersion, jws: string): DidHistory;
   createAssessment(a: { templateId: string; subject: string; subjectDid?: string; claimedLevel: Level; evidence: { key: string; date: string; summary: string; body: object }[]; commitBy?: string; revealBy?: string; id?: string }): AssessmentView;
   invite(assessmentId: string, i: { attestor: string; role: string; evidence: string }): Invitation;
+  /** Declare the roster final; the reveal phase can then open once everyone invited has committed. */
+  closeInvitations(assessmentId: string): { closed: true; invited: number };
   removeInvitation(assessmentId: string, attestationId: string, opts?: { reason?: string }): { removed: string; invited: number };
   ticketFor(assessmentId: string, attestationId: string): SigningTicket;
   commit(assessmentId: string, req: CommitRequest): { committed: number; of: number };

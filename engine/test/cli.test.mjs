@@ -60,10 +60,11 @@ describe('CLI: a whole assessment through the command line', () => {
     const out = join(dir, 'cred.json');
     expect((await run('finalize', 'as-cli', '--out', out, '--dir', data)).code).toBe(0);
     const issuerDid = JSON.parse(readFileSync(join(data, 'issuer.key.json'), 'utf8')).did, logDid = JSON.parse(readFileSync(join(data, 'log.key.json'), 'utf8')).did;
-    const unpinned = await run('verify', out);
+    const unpinned = await run('verify', out, '--use-recommended-policy');
+    expect((await run('verify', out, '--issuer', issuerDid, '--log-key', logDid)).code).toBe(64); // no policy: refused, not silently defaulted
     expect(unpinned.code).toBe(1); expect(unpinned.out).toMatch(/FAIL {2}trusted-issuer/); expect(unpinned.out).toMatch(/NOTICE.*not been cryptographically reviewed/);
-    expect((await run('verify', out, '--allow-unpinned')).code).toBe(0);
-    const v = await run('verify', out, '--issuer', issuerDid, '--log-key', logDid);
+    expect((await run('verify', out, '--allow-unpinned', '--use-recommended-policy')).code).toBe(0);
+    const v = await run('verify', out, '--issuer', issuerDid, '--log-key', logDid, '--use-recommended-policy');
     expect(v.code).toBe(0); expect(v.out).toMatch(/PASS {2}attestor-signatures/); expect(v.out).toMatch(/not a verifier policy/);
 
     const secretA = JSON.parse(readFileSync(keys.a, 'utf8')).privateKey;
@@ -73,13 +74,13 @@ describe('CLI: a whole assessment through the command line', () => {
 
     const bad = JSON.parse(readFileSync(out, 'utf8')); bad.sanad.bundle.attestations[0].level = 5;
     const badf = join(dir, 'bad.json'); writeFileSync(badf, JSON.stringify(bad));
-    expect((await run('verify', badf, '--allow-unpinned')).code).toBe(1);
+    expect((await run('verify', badf, '--allow-unpinned', '--use-recommended-policy')).code).toBe(1);
 
     const pf = join(dir, 'p.json'); writeFileSync(pf, JSON.stringify(POLICY5));
     const issuer = JSON.parse(readFileSync(join(data, 'issuer.key.json'), 'utf8')).did;
     const v2 = await run('verify', out, '--policy', pf, '--issuer', issuer, '--log-key', logDid, '--as-of', today());
     expect(v2.code).toBe(0); expect(v2.out).toMatch(/your policy/); expect(v2.out).toMatch(/provisional/);
-    expect((await run('verify', out, '--issuer', 'did:key:zOther', '--log-key', logDid)).code).toBe(1);
+    expect((await run('verify', out, '--issuer', 'did:key:zOther', '--log-key', logDid, '--use-recommended-policy')).code).toBe(1);
     expect(json(await run('log', 'checkpoint', '--dir', data)).payload.size).toBeGreaterThan(0);
     expect(json(await run('log', 'inclusion', '--index', '0', '--dir', data)).index).toBe(0);
   });

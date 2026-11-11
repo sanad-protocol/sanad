@@ -104,7 +104,8 @@ export function validateTemplate(t) {
         if (!isObj(e)) { errors.push(w + ': must be an object'); return; }
         closed(e, ['key', 'kind', 'summary'], ['live', 'minutes'], w, errors);
         if ('key' in e) {
-          if (!(typeof e.key === 'string' && ID_RE.test(e.key))) errors.push(w + '.key: must match ' + ID_RE);
+          if (typeof e.key === 'string' && /^a\d{2,}$/.test(e.key)) errors.push(w + '.key: "' + e.key + '" looks like an attestation id (a01, a02, ...) and would collide with one');
+          else if (!(typeof e.key === 'string' && ID_RE.test(e.key))) errors.push(w + '.key: must match ' + ID_RE);
           else if (seen.has(e.key)) errors.push(w + '.key: duplicate key');
           else seen.add(e.key);
         }

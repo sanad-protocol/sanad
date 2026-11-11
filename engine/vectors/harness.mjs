@@ -108,7 +108,7 @@ export function runVector(vector) {
           const a = doc.sanad.bundle.attestations.find((x) => x.id === step.flipSignatureOf);
           const sig = a.signature; a.signature = sig.slice(0, -10) + (sig.at(-10) === 'A' ? 'B' : 'A') + sig.slice(-9);
         }
-        const v = engine.verifyCredential(doc, step.policy ? { policy: { ...step.policy, asOf: doc.validFrom.slice(0, 10) } } : { useRecommendedPolicy: true });
+        const v = engine.verifyCredential(doc, step.policy ? { policy: { ...step.policy, asOf: doc.validFrom.slice(0, 10) }, diagnose: true } : { useRecommendedPolicy: true, diagnose: true });
         observed = { ok: v.ok, failed: v.checks.filter((c) => !c.ok).map((c) => c.name), recognition: compact(v.recognition), dropped: (v.recognition?.dropped ?? []).map((d) => d.id + ':' + d.rule) }; break;
       }
       default: throw new Error('unknown op ' + step.op);

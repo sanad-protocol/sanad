@@ -96,6 +96,7 @@ export function createHttpServer({ engine, operatorToken, serveStatic = true, on
     return engine.previewRecognition(p.id, { policy: body.policy });
   });
   route('POST', '/v1/assessments/:id/invitations/:att/remove', ({ p, body }) => engine.removeInvitation(p.id, p.att, { reason: isObj(body) ? body.reason : undefined }), true);
+  route('POST', '/v1/assessments/:id/close-invitations', ({ p }) => engine.closeInvitations(p.id), true);
   route('POST', '/v1/assessments/:id/commit', ({ p, body }) => engine.commit(p.id, body));
   route('POST', '/v1/assessments/:id/reveal', ({ p, body }) => engine.reveal(p.id, body));
   route('POST', '/v1/assessments/:id/finalize', ({ p, body }) => engine.finalize(p.id, { allowShortfall: isObj(body) && body.allowShortfall === true }), true);

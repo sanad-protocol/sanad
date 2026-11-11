@@ -12,10 +12,11 @@ import { createLog } from './log.mjs';
 import { sealBundle, bundleHashOf as hashBundle, buildCredential, verifyCredential as verifyDoc, ATTESTATION_TYP } from './bundle.mjs';
 
 const ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
-const SUBJECT_RE = /^urn:([a-z0-9][a-z0-9-]{0,31}):([^\s]{1,160})$/i;
-// A guard rail, not a guarantee: namespaces that are plainly personal are refused, but a URN can still be chosen badly.
-const PERSONAL_NS = new Set(['email', 'mailto', 'mail', 'person', 'name', 'tel', 'phone', 'msisdn']);
-const subjectOk = (s) => { const m = typeof s === 'string' ? SUBJECT_RE.exec(s) : null; return !!m && !PERSONAL_NS.has(m[1].toLowerCase()) && !m[2].includes('@'); };
+const SUBJECT_UUID = /^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const SUBJECT_HASH = /^urn:sanad:subject:[0-9a-f]{32,64}$/;
+// A guard rail, not a guarantee: only an RFC 4122 UUID URN (lower case) or an opaque hash URN is accepted, so a name or an address cannot be typed in by mistake;
+// the host remains responsible for generating a value that is not derived from a person's data.
+const subjectOk = (s) => typeof s === 'string' && (SUBJECT_UUID.test(s) || SUBJECT_HASH.test(s));
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 // a credential id derived from the assessment and the bundle hash, so that a retried finalize overwrites instead of duplicating
 const uuidFrom = (text) => { const h = createHash('sha256').update(text).digest('hex'); return `urn:uuid:${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`; };
@@ -31,10 +32,13 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
   if (!issuer || !issuer.did || !issuer.kid || typeof issuer.sign !== 'function') throw err('bad_config', 'issuer must be { did, kid, sign }');
   if (!logSigner || !logSigner.did || typeof logSigner.sign !== 'function') throw err('bad_config', 'logSigner must be { did, kid, sign }');
   const res = resolver ?? createResolver({ store });
-  const log = createLog({ store, logId, signer: logSigner, clock });
-  // the engine's clock never runs backwards: a deadline that has passed stays passed (also across restarts, through each assessment's high-water mark)
+  // The engine's clock never runs backwards: a deadline that has passed stays passed, and log timestamps never decrease. It survives restarts through each
+  // assessment's high-water mark and the last log entry's time. A clock that jumps far FORWARD cannot be undone (deadlines of every assessment touched afterwards
+  // have passed); the operator must keep the clock right, and the engine makes no attempt to guess which reading is wrong.
   let hi = 0;
   const nowMs = () => { const t = clock.now(); if (Number.isFinite(t) && t > hi) hi = t; return hi; };
+  const log = createLog({ store, logId, signer: logSigner, clock: { now: nowMs } });
+  if (log.size() > 0) { try { const t = Date.parse(JSON.parse(log.entries(log.size() - 1, log.size())[0].leaf).ts); if (Number.isFinite(t) && t > hi) hi = t; } catch { /* a damaged log is reported by verifyChain */ } }
   const nowIso = () => new Date(nowMs()).toISOString();
   const today = () => nowIso().slice(0, 10);
 
@@ -45,7 +49,15 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
     return a;
   };
   const save = (a) => { a.hwm = Math.max(hi, a.hwm ?? 0); store.put('assessments', a.id, a); };
-  const revealOpen = (a) => !!a.revealOpenedAt || Object.keys(a.reveals).length > 0 || (a.invitations.length > 0 && a.invitations.every((i) => a.commits[i.attestationId])) || nowMs() > Date.parse(a.commitBy);
+  // The roster is complete when every evidence item that needs human attestors has at least attestors.min invitations, or the operator closed the invitations.
+  // The reveal phase opens only when the roster is complete and everyone invited has committed, or when the commit deadline has passed.
+  const rosterComplete = (a) => {
+    if (a.invitationsClosed) return true;
+    const rec = store.get('templates', a.templateId);
+    const min = rec?.template?.attestors?.min ?? 1;
+    return a.evidence.filter((e) => e.kind !== 'auto').every((e) => new Set(a.invitations.filter((i) => i.evidence === e.id).map((i) => i.attestor)).size >= min);
+  };
+  const revealOpen = (a) => !!a.revealOpenedAt || Object.keys(a.reveals).length > 0 || (a.invitations.length > 0 && rosterComplete(a) && a.invitations.every((i) => a.commits[i.attestationId])) || nowMs() > Date.parse(a.commitBy);
   const sigFail = (r) => { const e = err('bad_signature', 'signature refused: ' + r.reason, 401); e.reason = r.reason; return e; };
 
   function publicView(a) {
@@ -101,7 +113,7 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       const rec = typeof templateId === 'string' && ID_RE.test(templateId) ? store.get('templates', templateId) : null;
       if (!rec) throw err('template_unknown', 'no such template: ' + templateId, 404);
       const t = rec.template;
-      if (!subjectOk(subject)) throw err('bad_subject', 'subject must be a pseudonymous URN such as urn:uuid:<uuid> (no spaces, no personal namespace such as email, person, name or tel); names and contact details do not belong in the engine. This is a guard rail: the host remains responsible for choosing a non-identifying URN');
+      if (!subjectOk(subject)) throw err('bad_subject', 'subject must be urn:uuid:<RFC 4122 uuid, lower case> or urn:sanad:subject:<32 to 64 lower-case hex characters>; names and contact details do not belong in the engine. This is a guard rail: the host remains responsible for generating a value that is not derived from personal data');
       if (subjectDid !== undefined && !(typeof subjectDid === 'string' && /^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subjectDid) && subjectDid.length <= 200)) throw err('bad_subject', 'subjectDid must be a DID');
       if (!Number.isInteger(claimedLevel) || claimedLevel < 0 || claimedLevel > 5) throw err('bad_assessment', 'claimedLevel must be an integer from 0 to 5');
       const aid = id ?? 'as-' + randomBytes(8).toString('hex');
@@ -143,6 +155,7 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       const a = getRec(assessmentId);
       const t = engine.getTemplate(a.templateId);
       if (a.state !== 'open') throw err('state', 'the assessment is finalized', 409);
+      if (a.invitationsClosed) throw err('state', 'the operator closed the invitations', 409);
       if (revealOpen(a)) throw err('state', 'the reveal phase is open; no more invitations', 409);
       const ev = a.evidence.find((e) => e.id === evidence || e.id === `${a.id}.${evidence}`);
       if (!ev) throw err('bad_evidence', 'unknown evidence item: ' + evidence);
@@ -158,6 +171,19 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       a.invitations.push(inv); a.seq = seq;
       save(a);
       return clone(inv);
+    },
+
+    /** Operator action: declare the roster final. The reveal phase can then open as soon as everyone invited has committed; no more invitations are accepted. */
+    closeInvitations(assessmentId) {
+      const a = getRec(assessmentId);
+      if (a.state !== 'open') throw err('state', 'the assessment is finalized', 409);
+      if (a.invitations.length === 0) throw err('state', 'nothing to close: no attestor is invited', 409);
+      if (revealOpen(a)) throw err('state', 'the reveal phase is already open', 409);
+      a.invitationsClosed = true;
+      if (a.invitations.every((i) => a.commits[i.attestationId])) a.revealOpenedAt = nowIso();
+      store.append('events', { type: 'invitations-closed', assessment: a.id, at: nowIso(), invited: a.invitations.length });
+      save(a);
+      return { closed: true, invited: a.invitations.length };
     },
 
     /** Operator action: withdraw an invitation before that attestor's first commit. Never reuses the attestation id; recorded in the events stream and in the credential's process.removed. */
@@ -185,9 +211,9 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       checkCommit({ payload, invitation: inv, assessment: a });
       const r = res.verifyStatement({ jws, payload, typ: COMMIT_TYP, signer: inv.attestor, date: today() });
       if (!r.ok) throw sigFail(r);
-      const entry = log.append({ kind: 'commit', ref: hashOf(payload) });
+      const entry = log.appendOnce({ kind: 'commit', ref: hashOf(payload) }); // idempotent: a retry after a crash finds the leaf already there
       a.commits[attestationId] = { commit: payload.commit, payload: clone(payload), jws, at: nowIso(), logIndex: entry.index };
-      if (a.invitations.every((i) => a.commits[i.attestationId])) a.revealOpenedAt = nowIso();
+      if (rosterComplete(a) && a.invitations.every((i) => a.commits[i.attestationId])) a.revealOpenedAt = nowIso();
       save(a);
       return { committed: Object.keys(a.commits).length, of: a.invitations.length };
     },
@@ -247,8 +273,8 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       // template minimum and live sitting
       const shortfall = [];
       const byEv = new Map(a.evidence.map((e) => [e.id, new Set()]));
-      for (const k of revealed) byEv.get(a.reveals[k].statement.evidence)?.add(a.reveals[k].statement.attestor);
-      for (const e of a.evidence) if (e.kind !== 'auto' && byEv.get(e.id).size < t.attestors.min) shortfall.push(`${e.id}: ${byEv.get(e.id).size} revealed attestor(s), template minimum ${t.attestors.min}`);
+      for (const k of revealed) if (!a.reveals[k].statement.conflictDeclared) byEv.get(a.reveals[k].statement.evidence)?.add(a.reveals[k].statement.attestor); // a declared conflict does not count toward the minimum
+      for (const e of a.evidence) if (e.kind !== 'auto' && byEv.get(e.id).size < t.attestors.min) shortfall.push(`${e.id}: ${byEv.get(e.id).size} revealed attestor(s) without a declared conflict, template minimum ${t.attestors.min}`);
       if (t.liveSitting && !a.evidence.some((e) => e.kind === 'sitting' && byEv.get(e.id).size > 0)) shortfall.push('liveSitting: no sitting evidence has a revealed attestor');
       if (shortfall.length && !allowShortfall) throw err('below_template_minimum', 'the template requirements are not met (' + shortfall.join('; ') + '); pass allowShortfall to finalize anyway, which is recorded in the credential', 409);
 

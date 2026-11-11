@@ -21,13 +21,15 @@ const USAGE = `sanad-engine <command>
   invite <assessment> --attestor <did> --evidence <key> [--role <role>]
   commit <assessment> <attestationId> --key <file> --level <n> [--url <server>]
   reveal <assessment> <attestationId> --key <file> [--date <YYYY-MM-DD>] [--conflict] [--url <server>]
+  close-invitations <assessment>              declare the roster final (the reveal phase can then open once everyone invited has committed)
   uninvite <assessment> <attestationId> [--reason <text>]   withdraw an invitation before that attestor's first commit
   preview <assessment> [--policy <file>]      provisional recognition over revealed attestations only
   ticket <assessment> <attestationId>         the signing ticket for an attestor's client
   finalize <assessment> [--out <file>] [--allow-shortfall]   (the template minimum is enforced; the override is recorded in the credential)
   verify <credential.json> [--policy <file>] [--as-of <YYYY-MM-DD>] [--issuer <did>] [--log-key <did>] [--log-id <id>]
          [--pin-key <did>=<multibase>] [--dids <histories.json>] [--stats <file>] [--template <file>] [--allow-unpinned] [--allow-issuer-statistics]
-         Without --policy the CLI takes the template's recommendation and the credential's date, and says so. Unpinned issuer or log key fails unless --allow-unpinned.
+         A policy is required: --policy <file> (all seven fields), or --use-recommended-policy to take the issuer's recommendation and the credential's date knowingly.
+         Unpinned issuer or log key fails unless --allow-unpinned.
   log checkpoint | log inclusion --index <i> [--size <n>] | log consistency --m <m> [--n <n>]
   serve [--port <n>] [--host <addr>]          start the HTTP API and demonstration page (default 127.0.0.1:8787)
 
@@ -37,7 +39,7 @@ class Usage extends Error {}
 
 function parse(args) {
   const pos = [], opt = {};
-  const bool = new Set(['conflict', 'help', 'allow-shortfall', 'allow-unpinned', 'allow-issuer-statistics']);
+  const bool = new Set(['conflict', 'help', 'allow-shortfall', 'allow-unpinned', 'allow-issuer-statistics', 'use-recommended-policy']);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a.startsWith('--')) {
@@ -121,7 +123,8 @@ export async function main(argv, io = {}) {
       const doc = readJson(f);
       const o = {};
       if (opt.policy) o.policy = readJson(opt.policy);
-      else { o.useRecommendedPolicy = true; out('NOTE  no --policy given: using the template\'s recommended policy and the credential\'s date as the evaluation day. That is the issuer\'s recommendation, not a verifier policy.'); }
+      else if (opt['use-recommended-policy']) { o.useRecommendedPolicy = true; out('NOTE  --use-recommended-policy: the template\'s recommended policy and the credential\'s date are used as the evaluation day. That is the issuer\'s recommendation, not a verifier policy.'); }
+      else throw new Usage('verify needs a policy: --policy <file> (all seven fields and asOf or --as-of), or --use-recommended-policy to take the issuer\'s recommendation knowingly');
       if (opt['as-of']) o.asOf = opt['as-of'];
       // verify-only mode: no data directory is needed; the verifier pins the issuer and log key (DIDs) and, for did:web identities, the keys
       if (opt.issuer) o.trustedIssuers = [opt.issuer];
@@ -133,11 +136,12 @@ export async function main(argv, io = {}) {
       if (opt.template) o.template = readJson(opt.template);
       if (opt['allow-unpinned']) o.allowUnpinned = true;
       if (opt['allow-issuer-statistics']) o.allowIssuerStatistics = true;
+      o.diagnose = true; // a local command: show every check, not only the first failure
       const r = verifyCredential(doc, o);
       for (const c of r.checks) out((c.ok ? 'PASS  ' : 'FAIL  ') + c.name + '  ' + c.detail);
       for (const w of r.warnings) out('WARN  ' + w);
       if (r.recognition) {
-        out(`recognition (${r.basis.policySource === 'verifier' ? 'your policy' : 'the issuer\'s recommendation, not a verifier policy'}; evaluation day ${r.recognition.policy.asOf}): status ${r.recognition.status}, level ${r.recognition.level}, confidence ${r.recognition.confidence}`);
+        out(`${r.ok ? '' : 'UNVERIFIED (a check failed; this is what the data would give if it were genuine) '}recognition (${r.basis.policySource === 'verifier' ? 'your policy' : 'the issuer\'s recommendation, not a verifier policy'}; evaluation day ${r.recognition.policy.asOf}): status ${r.recognition.status}, level ${r.recognition.level}, confidence ${r.recognition.confidence}`);
         for (const s of r.recognition.explanation) out('  ' + s.rule + '  ' + s.summary);
       }
       out('NOTICE  ' + NOTICE);
@@ -204,6 +208,7 @@ export async function main(argv, io = {}) {
         const role = opt.role ?? engine.getTemplate(a.templateId).attestors.roles[0];
         json(engine.invite(aid, { attestor: need(opt, 'attestor'), role, evidence: need(opt, 'evidence') })); return 0;
       }
+      if (cmd === 'close-invitations') { if (!rest[0]) throw new Usage('close-invitations needs an assessment id'); json(engine.closeInvitations(rest[0])); return 0; }
       if (cmd === 'uninvite') { if (!rest[0] || !rest[1]) throw new Usage('uninvite needs <assessment> <attestationId>'); json(engine.removeInvitation(rest[0], rest[1], { reason: opt.reason })); return 0; }
       if (cmd === 'preview') { if (!rest[0]) throw new Usage('preview needs an assessment id'); json(engine.previewRecognition(rest[0], { policy: opt.policy ? readJson(opt.policy) : undefined })); return 0; }
       if (cmd === 'ticket') { if (!rest[0] || !rest[1]) throw new Usage('ticket needs <assessment> <attestationId>'); json(engine.ticketFor(rest[0], rest[1])); return 0; }

@@ -158,6 +158,8 @@ describe('invitation removal', () => {
     const a = H.commitAs(engine, P.A, 'as-1', inv[0].attestationId, 3).secret;
     expect(engine.getAssessment('as-1').revealOpen).toBe(false);
     engine.removeInvitation('as-1', inv[1].attestationId);
+    expect(engine.getAssessment('as-1').revealOpen).toBe(false); // one invitee left, template minimum 2: the roster is not complete
+    engine.closeInvitations('as-1');
     expect(engine.getAssessment('as-1').revealOpen).toBe(true);
     H.revealAs(engine, P.A, 'as-1', a); clock.advance(1000);
     H.code(() => engine.finalize('as-1'), 'below_template_minimum');
@@ -199,7 +201,7 @@ describe('HTTP: ticket, preview, removal, time', () => {
 describe('automatic evidence needs autoLevel', () => {
   it('an auto item without body.autoLevel is refused at creation (the core would silently ignore it)', () => {
     const s = H.setup({ tpl: H.template({ evidence: [{ key: 'E1', kind: 'sitting', summary: 's' }, { key: 'E2', kind: 'auto', summary: 'rig' }] }) });
-    const mk = (body) => s.engine.createAssessment({ id: 'x' + Math.random().toString(16).slice(2, 8), templateId: 'maths-oral-v1', subject: 'urn:uuid:7', claimedLevel: 3, evidence: [{ key: 'E1', date: '2026-03-01', summary: 's', body: {} }, { key: 'E2', date: '2026-03-01', summary: 'r', body }] });
+    const mk = (body) => s.engine.createAssessment({ id: 'x' + Math.random().toString(16).slice(2, 8), templateId: 'maths-oral-v1', subject: 'urn:uuid:77777777-7777-4777-8777-777777777777', claimedLevel: 3, evidence: [{ key: 'E1', date: '2026-03-01', summary: 's', body: {} }, { key: 'E2', date: '2026-03-01', summary: 'r', body }] });
     H.code(() => mk({ result: 'pass' }), 'bad_evidence'); H.code(() => mk({ autoLevel: 9 }), 'bad_evidence');
     expect(mk({ autoLevel: 3 }).evidence).toHaveLength(2);
   });
