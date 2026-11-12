@@ -12,7 +12,7 @@ lead: Sanad specifies a data model for claims, evidence and attestations, a dete
 <ul class="cta">
 <li><a class="primary" href="/spec/0.1/">Read the specification</a></li>
 <li><a href="/conformance/">Run the test vectors</a></li>
-<li><a href="/explainer/">Try the explainer</a></li>
+<li><a href="/engine/">Get the engine</a></li>
 <li><a href="/participate/">Participate</a></li>
 </ul>
 
@@ -61,5 +61,5 @@ Sanad (v0.1) uses **decentralised assessment**: it does not accredit anyone and 
 
 - Read the [specification](/spec/0.1/) (about 20 minutes) or its [PDF](/spec/SANAD-SPEC-0.1.pdf).
 - Run `node reference/verify.mjs` from the [conformance page](/conformance/) to see 20 vectors pass.
-- Open the [explainer](/explainer/) to change a verifier policy and watch the result and its explanation change.
+- Get the [engine](/engine/) to run an assessment end to end, or open the [interactive page on how a level is computed](/explainer/) to change a verifier policy and watch the result change.
 - Read the [questions and answers](/faq/), the [roadmap](/roadmap/) and how to [participate](/participate/).

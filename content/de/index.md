@@ -11,7 +11,7 @@ lead: Sanad legt ein Datenmodell für Behauptungen, Nachweise und Bestätigungen
 
 <ul class="cta">
 <li><a class="primary" href="/spec/0.1/">Spezifikation lesen (englisch)</a></li>
-<li><a href="/explainer/">Erklärseite ansehen</a></li>
+<li><a href="/de/engine/">Engine holen</a></li>
 <li><a href="/de/mitmachen/">Mitmachen</a></li>
 </ul>
 
@@ -55,5 +55,5 @@ Sanad (Version 0.1) beruht auf **dezentraler Bewertung**: Es akkreditiert nieman
 ## Einstieg
 
 - Lesen Sie die [Spezifikation](/spec/0.1/) (englisch, etwa 20 Minuten).
-- Öffnen Sie die [Erklärseite](/explainer/), um eine Richtlinie zu ändern und die Begründung neu berechnen zu lassen.
+- Holen Sie die [Engine](/de/engine/), um eine Bewertung von Anfang bis Ende durchzuführen, oder öffnen Sie die [interaktive Seite zur Berechnung eines Niveaus](/explainer/), um eine Richtlinie zu ändern und das Ergebnis neu berechnen zu lassen.
 - Lesen Sie die [Fragen und Antworten](/faq/) und erfahren Sie, wie Sie [mitmachen](/de/mitmachen/) können.
