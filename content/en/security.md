@@ -9,14 +9,14 @@ toc: true
 ---
 
 <!-- glance -->
-- Report to security@sanadprotocol.org with "Sanad security" in the subject.
+- Report to info@sanadprotocol.org with "Sanad security" in the subject.
 - A reply is aimed for within 7 days; a fix or a plan within 90 days.
 - The site sets its security policy in the page, not in a header, because GitHub Pages cannot set headers.
 <!-- /glance -->
 
 ## Reporting a vulnerability
 
-Write to security@sanadprotocol.org with what you found, how to reproduce it and the version affected. Please allow reasonable time before public disclosure. Good-faith research is welcome; do not access data of others and do not disrupt services. Scope: weaknesses in the protocol design (the recognition function, blind marking, hashing, the log), in the reference code and in this website. The machine-readable policy is at [/.well-known/security.txt](/.well-known/security.txt).
+Write to info@sanadprotocol.org with what you found, how to reproduce it and the version affected. Please allow reasonable time before public disclosure. Good-faith research is welcome; do not access data of others and do not disrupt services. Scope: weaknesses in the protocol design (the recognition function, blind marking, hashing, the log), in the reference code and in this website. The machine-readable policy is at [/.well-known/security.txt](/.well-known/security.txt).
 
 ## Security measures of this website
 

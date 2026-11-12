@@ -6,7 +6,7 @@ In short: be respectful and constructive; accept criticism of work graciously; d
 
 ## Reporting
 
-Report violations to contact@sanadprotocol.org. Reports are treated confidentially. The steward may warn, restrict or remove participants after hearing them. Because the project is run by one person for now, a report about the steward may be sent to the stand-by person named in the governance charter once one has been appointed.
+Report violations to info@sanadprotocol.org. Reports are treated confidentially. The steward may warn, restrict or remove participants after hearing them. Because the project is run by one person for now, a report about the steward may be sent to the stand-by person named in the governance charter once one has been appointed.
 
 ## Scope
 

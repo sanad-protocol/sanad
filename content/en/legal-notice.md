@@ -13,7 +13,7 @@ Flat 1108, The Pad by Omniyat
 Dubai, United Arab Emirates
 (The United Arab Emirates have no postal codes.)
 
-E-mail: contact@sanadprotocol.org
+E-mail: info@sanadprotocol.org
 
 ## Responsible for content (§ 18 para. 2 of the German Medienstaatsvertrag)
 

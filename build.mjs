@@ -131,7 +131,7 @@ const sitemap = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://w
 writeFileSync(join(OUT, 'sitemap.xml'), sitemap);
 writeFileSync(join(OUT, 'robots.txt'), `User-agent: *\nAllow: /\n\nSitemap: ${SITE.url}/sitemap.xml\n`);
 mkdirSync(join(OUT, '.well-known'), { recursive: true });
-writeFileSync(join(OUT, '.well-known/security.txt'), `Contact: mailto:security@sanadprotocol.org\nExpires: 2027-11-07T00:00:00.000Z\nPreferred-Languages: en, de\nCanonical: ${SITE.url}/.well-known/security.txt\nPolicy: ${SITE.url}/participate/#security\n`);
+writeFileSync(join(OUT, '.well-known/security.txt'), `Contact: mailto:info@sanadprotocol.org\nExpires: 2027-11-07T00:00:00.000Z\nPreferred-Languages: en, de\nCanonical: ${SITE.url}/.well-known/security.txt\nPolicy: ${SITE.url}/participate/#security\n`);
 writeFileSync(join(OUT, 'humans.txt'), `/* TEAM */\nSteward: Arash Kermani Kolankeh\nSite: sanadprotocol.org\n\n/* SITE */\nLast update: 2026/11/07\nLanguage: English, Deutsch\nStandards: HTML5, CSS3, WCAG 2.2 AA (target)\nComponents: no scripts, no cookies, no external requests\n`);
 if (existsSync('spec/SANAD-SPEC-0.1.pdf')) cpSync('spec/SANAD-SPEC-0.1.pdf', join(OUT, 'spec/SANAD-SPEC-0.1.pdf'));
 writeFileSync(join(OUT, 'CNAME'), 'sanadprotocol.org\n'); writeFileSync(join(OUT, '.nojekyll'), '');

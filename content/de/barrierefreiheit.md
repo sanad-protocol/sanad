@@ -9,7 +9,7 @@ description: Ziel, Prüfung vom 7. November 2026, Methode und Meldung von Barrie
 <!-- glance -->
 - Ziel: WCAG 2.2, Konformitätsstufe AA.
 - Prüfung vom **7. November 2026**: Selbstbewertung des Betreibers, keine externe Prüfung.
-- Barrieren melden: contact@sanadprotocol.org. Eine Antwort wird innerhalb von 14 Tagen angestrebt.
+- Barrieren melden: info@sanadprotocol.org. Eine Antwort wird innerhalb von 14 Tagen angestrebt.
 <!-- /glance -->
 
 ## Stand dieser Erklärung
@@ -39,4 +39,4 @@ Diese Erklärung ist **freiwillig**. Betreiber ist eine Privatperson; die gesetz
 
 ## Rückmeldung und Kontakt
 
-Wenn Sie auf eine Barriere stoßen, schreiben Sie an contact@sanadprotocol.org mit der Seitenadresse und einer Beschreibung. Eine Antwort wird innerhalb von 14 Tagen angestrebt. Sind Sie mit der Antwort nicht zufrieden, können Sie sich an die zuständige Stelle Ihres Landes wenden.
+Wenn Sie auf eine Barriere stoßen, schreiben Sie an info@sanadprotocol.org mit der Seitenadresse und einer Beschreibung. Eine Antwort wird innerhalb von 14 Tagen angestrebt. Sind Sie mit der Antwort nicht zufrieden, können Sie sich an die zuständige Stelle Ihres Landes wenden.

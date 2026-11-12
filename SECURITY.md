@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Report vulnerabilities in the specification, the conformance vectors, the reference code or this website by e-mail to security@sanadprotocol.org with "Sanad security" in the subject. Please include what you found, how to reproduce it and the version affected.
+Report vulnerabilities in the specification, the conformance vectors, the reference code or this website by e-mail to info@sanadprotocol.org with "Sanad security" in the subject. Please include what you found, how to reproduce it and the version affected.
 
 Please give the maintainer reasonable time to respond (a reply is aimed for within 7 days, a fix or a plan within 90 days) before public disclosure. Good-faith research is welcome; do not access data of others or disrupt services.
 

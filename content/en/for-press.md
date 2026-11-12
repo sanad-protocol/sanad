@@ -9,7 +9,7 @@ crumbs: [["Who it is for","/for/"]]
 ---
 
 <!-- glance -->
-- Contact: press@sanadprotocol.org.
+- Contact: info@sanadprotocol.org.
 - Version 0.1; not accreditation; no token; one steward, a second steward being appointed.
 <!-- /glance -->
 

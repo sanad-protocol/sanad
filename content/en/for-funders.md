@@ -19,4 +19,4 @@ Sanad is a one-person start with a public specification, a working reference imp
 - What is missing: a second steward, a legal entity, a trademark, independent implementations, reviews.
 - What support would change: speed and independence, not the design. The design is open and free.
 
-**Next step:** read [Support](/support/) and write to contact@sanadprotocol.org.
+**Next step:** read [Support](/support/) and write to info@sanadprotocol.org.
