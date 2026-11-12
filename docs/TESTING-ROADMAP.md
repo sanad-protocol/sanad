@@ -52,7 +52,7 @@ Passed when: every tampered credential fails with a named check, every refused a
 
 This is the most important step. A colleague who has not seen the engine's code writes a verifier from `spec/` and the conformance vectors only, in any language.
 
-Passed when: it passes the 20 core vectors and agrees with the engine on every credential produced in steps 1 to 3. Every place where they disagree is either an engine bug or a spec gap; both go into issues. The clean-room Python and Ruby checkers in `engine/test/crosscheck/` are a start but were written by the same project; a colleague's version counts, theirs does not. Known open fault at the time of writing: the Ruby checker fails every credential that is not first in its log.
+Passed when: it passes the 20 core vectors and agrees with the engine on every credential produced in steps 1 to 3. Every place where they disagree is either an engine bug or a spec gap; both go into issues. The clean-room Python and Ruby checkers in `engine/test/crosscheck/` are a start but were written by the same project; a colleague's version counts, theirs does not. The Ruby checker's earlier fault with credentials that are not first on their log was fixed in commit 4530dd6 and is covered by a test; a credential made on a shared log is a good case to include.
 
 ## Step 5. Policy workshop (2 hours, three or four people who would be verifiers)
 
@@ -64,7 +64,7 @@ Passed when: the policies produce visibly different results, each person can exp
 
 The Kamangir examination service reaches the engine through a port (pull request 245), in test mode. Its rehearsal report lists 42 scenarios and the open items.
 
-Before real candidates: decide how level 6 is represented (it reads as 5 outside Kamangir today); decide what happens to a credential if its provider disappears; run the examiner-page end-to-end test in a tree where it can run; get the Ruby fault fixed. Then run five to ten volunteer candidates, with examiners who know it is a trial and no fee.
+Before real candidates: decide how level 6 is represented (it reads as 5 outside Kamangir today); decide what happens to a credential if its provider disappears; run the examiner-page end-to-end test in a tree where it can run; re-run the rehearsal against the current engine, since its report was written before the Ruby fix. Then run five to ten volunteer candidates, with examiners who know it is a trial and no fee.
 
 Passed when: every candidate gets a credential that a verifier outside Kamangir can check, and no examiner could see another's mark before the reveal.
 
