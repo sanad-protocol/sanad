@@ -101,6 +101,37 @@ describe('E1: a correct credential that is not first on its log verifies in ever
   it.skipIf(rb.status !== 0)('Ruby: both credentials pass', () => { for (const c of [first, second]) { const o = runRb(c); expect(o.stdout.split('\n').filter((l) => l.startsWith('FAIL')), o.stdout).toEqual([]); expect(o.stdout).toMatch(/OVERALL: PASS/); } });
 });
 
+// A reveal that arrives after the deadline is refused; the attestation is then both missing and late (late is a subset of missing, bundle.mjs). The Ruby cross-checker once counted it twice.
+function lateRevealCredential() {
+  let now = Date.parse('2026-03-02T10:00:00Z');
+  const engine = createEngine({ store: createMemoryStore(), issuer: makeSigner(keyPairFromSeed(sd(1)).privateKey), logSigner: makeSigner(keyPairFromSeed(sd(2)).privateKey), logId: 'late-log', clock: { now: () => now } });
+  engine.registerTemplate({ id: 't', version: 1, title: 't', skill: { id: 's', title: 's' }, levels: [0, 1, 2, 3, 4, 5].map((l) => ({ level: l, label: 'L' + l })), evidence: [{ key: 'E1', kind: 'sitting', summary: 's' }], attestors: { min: 2, max: 3, roles: ['examiner'] }, liveSitting: true, deadlines: { commitHours: 24, revealHours: 48 }, policy: { id: 'p', minAttestors: 2, requireLive: true, halfLifeMonths: 36, minAttestorSittings: 0, minAgreement: 0, maxInferenceDepth: 0, inferenceDecay: 0.7 } });
+  const people = [createDemoAttestor('A', sd(10)), createDemoAttestor('B', sd(11)), createDemoAttestor('C', sd(12))];
+  const id = 'late-1';
+  engine.createAssessment({ id, templateId: 't', subject: 'urn:uuid:22222222-2222-4222-8222-222222222222', claimedLevel: 3, evidence: [{ key: 'E1', date: '2026-03-02', summary: 's', body: {} }] });
+  const inv = people.map((p) => engine.invite(id, { attestor: p.did, role: 'examiner', evidence: 'E1' }));
+  const sec = people.map((p, i) => { const { request, secret } = prepareCommit({ signer: p.signer, ticket: engine.ticketFor(id, inv[i].attestationId), level: 3 }); engine.commit(id, request); return secret; });
+  now += 30 * 3600000; // reveals open
+  const rev = (i) => engine.reveal(id, prepareReveal({ signer: people[i].signer, ticket: engine.ticketFor(id, inv[i].attestationId), secret: sec[i], date: '2026-03-03' }));
+  rev(0); rev(1);
+  now += 80 * 3600000; // past the reveal deadline
+  let refused = false; try { rev(2); } catch { refused = true; }
+  return { credential: engine.finalize(id), refused };
+}
+
+describe('E4: a refused late reveal is both missing and late, and every implementation agrees the credential is correct', () => {
+  const { credential, refused } = lateRevealCredential();
+  it('the engine records the attestation as missing and late', () => {
+    expect(refused).toBe(true);
+    const pr = credential.sanad.process;
+    expect(pr.missing.length).toBe(1);
+    expect(pr.late).toEqual(pr.missing);
+    expect(credential.sanad.bundle.attestations.length).toBe(2);
+  });
+  it.skipIf(!have)('Python passes it', () => { const o = run(credential, '2026-03-12'); expect(o.stdout.split('\n').filter((l) => l.startsWith('FAIL'))).toEqual([]); });
+  it.skipIf(rb.status !== 0)('Ruby passes it', () => { const o = runRb(credential, '2026-03-12'); expect(o.stdout.split('\n').filter((l) => l.startsWith('FAIL')), o.stdout).toEqual([]); expect(o.stdout).toContain('OVERALL: PASS'); });
+});
+
 describe.skipIf(rb.status !== 0)('E2: the Ruby evaluation day is honoured, and explains the confidence gap', () => {
   it('the positional as-of argument and --as-of change the result; with the same day the confidence equals the engine\'s (the earlier 0.933 against 0.936 came from the defaults of the verifier, evaluation day 2026-03-12 and half-life 24 months, being used because the positional arguments were ignored)', () => {
     const r = runExample('maths-oral');

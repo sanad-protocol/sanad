@@ -60,13 +60,13 @@ Each writes a policy for their own context (a university department, an employer
 
 Passed when: the policies produce visibly different results, each person can explain why in the output, and nobody needed to ask the organiser what to accept.
 
-## Step 6. A real small sitting inside a host (Kamangir, with named conditions)
+## Step 6. A real small sitting inside a host platform, with named conditions
 
-The Kamangir examination service reaches the engine through a port (pull request 245), in test mode. Its rehearsal report lists 42 scenarios and the open items.
+The first host platform reaches the engine through a port, in test mode, and has run a rehearsal of 42 scenarios. Use that rehearsal's report and open items as the starting list, and keep the host's name out of the engine repository.
 
-Before real candidates: decide how level 6 is represented (it reads as 5 outside Kamangir today); decide what happens to a credential if its provider disappears; run the examiner-page end-to-end test in a tree where it can run; re-run the rehearsal against the current engine, since its report was written before the Ruby fix. Then run five to ten volunteer candidates, with examiners who know it is a trial and no fee.
+Before real candidates: decide how level 6 is represented (it reads as 5 to an outside verifier today); decide what happens to a credential if its provider disappears; run the examiner-page end-to-end test in a tree where it can run; re-run the rehearsal whenever the engine changes (the last run, after the Ruby fixes, had 0 failing checks and all three outside verifiers agreeing except on one case, now fixed). Then run five to ten volunteer candidates, with examiners who know it is a trial and no fee.
 
-Passed when: every candidate gets a credential that a verifier outside Kamangir can check, and no examiner could see another's mark before the reveal.
+Passed when: every candidate gets a credential that a verifier outside the host can check, and no examiner could see another's mark before the reveal.
 
 ## Step 7. Settle the open decisions
 

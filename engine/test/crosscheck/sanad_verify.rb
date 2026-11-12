@@ -352,9 +352,11 @@ class Verifier
 
     # process counts
     p = s['process']
-    chk "process-counts", p['revealed'] == atts.length && p['committed'] == atts.length + p['missing'].length + p['late'].length &&
+    # late is a subset of missing: a reveal that arrived after the deadline was refused, so that attestation is missing from the bundle and also late
+    chk "process-counts", p['revealed'] == atts.length && p['committed'] == atts.length + p['missing'].length &&
+        p['late'].all? { |i| p['missing'].include?(i) } &&
         p['invited'] == p['committed'] + p['notCommitted'].length &&
-        (p['missing'] + p['late']).none? { |i| atts.any? { |a| a['id'] == i } },
+        p['missing'].none? { |i| atts.any? { |a| a['id'] == i } },
         "invited=#{p['invited']} committed=#{p['committed']} revealed=#{p['revealed']} missing=#{p['missing']} late=#{p['late']} attestations=#{atts.length}"
 
     verify_log(s, atts, evs, bh, ev0['bundleHash'])
