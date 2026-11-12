@@ -41,4 +41,4 @@ Contributions are made under the Developer Certificate of Origin, version 1.1: e
 
 ## Contact
 
-contact@sanadprotocol.org.
+info@sanadprotocol.org.

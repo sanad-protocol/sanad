@@ -68,4 +68,4 @@ Second steward; editor; security reviewer; accessibility tester; translators and
 
 ## How to help
 
-Write to contact@sanadprotocol.org. Please say what you can offer and whether you want to be named. Nobody is named publicly before agreeing in writing.
+Write to info@sanadprotocol.org. Please say what you can offer and whether you want to be named. Nobody is named publicly before agreeing in writing.

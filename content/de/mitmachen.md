@@ -36,8 +36,8 @@ Der geplante Weg: öffentliche Spezifikation, Referenzimplementierung, Konformit
 
 ## Sicherheit
 
-Melden Sie Schwachstellen in der Spezifikation oder im Referenzcode an security@sanadprotocol.org. Umfang, Antwortzeiten und die Sicherheitsmaßnahmen dieser Website finden Sie auf der [Sicherheitsseite](/security/) (englisch).
+Melden Sie Schwachstellen in der Spezifikation oder im Referenzcode an info@sanadprotocol.org. Umfang, Antwortzeiten und die Sicherheitsmaßnahmen dieser Website finden Sie auf der [Sicherheitsseite](/security/) (englisch).
 
 ## Kontakt
 
-contact@sanadprotocol.org. Siehe auch [Kontakt](/de/kontakt/).
+info@sanadprotocol.org. Siehe auch [Kontakt](/de/kontakt/).

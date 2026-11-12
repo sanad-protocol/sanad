@@ -9,7 +9,7 @@ description: Accessibility target, assessment of 7 November 2026, method and how
 <!-- glance -->
 - Target: WCAG 2.2, level AA.
 - Assessment of **7 November 2026**: a self-assessment by the operator, not an external audit.
-- Report barriers: contact@sanadprotocol.org. A reply is aimed for within 14 days.
+- Report barriers: info@sanadprotocol.org. A reply is aimed for within 14 days.
 <!-- /glance -->
 
 A German version is available: [Erklärung zur Barrierefreiheit](/de/barrierefreiheit/).
@@ -41,4 +41,4 @@ This statement is **voluntary**. The operator is a private individual, and the l
 
 ## Feedback and contact
 
-If you meet a barrier, write to contact@sanadprotocol.org with the page address and a description. A reply is aimed for within 14 days. If you are not satisfied, you may contact the competent body of your country.
+If you meet a barrier, write to info@sanadprotocol.org with the page address and a description. A reply is aimed for within 14 days. If you are not satisfied, you may contact the competent body of your country.

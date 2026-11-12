@@ -16,7 +16,7 @@ toc: true
 
 ## Comment on the specification
 
-Open an issue in the project repository (to be published at `sanad-protocol/sanad`) or write to contact@sanadprotocol.org. A comment period of 14 days applies before any decision. Please say which section and which rule you mean, and what you would change.
+Open an issue in the project repository (to be published at `sanad-protocol/sanad`) or write to info@sanadprotocol.org. A comment period of 14 days applies before any decision. Please say which section and which rule you mean, and what you would change.
 
 ## Implement it
 
@@ -28,7 +28,7 @@ Anyone may attest by publishing a decentralised identifier and signing. Nobody v
 
 ## Contribute
 
-Contributions are signed off under the Developer Certificate of Origin (a line "Signed-off-by: Name <email>" in each commit). The code of conduct is the Contributor Covenant, version 2.1; reports go to contact@sanadprotocol.org.
+Contributions are signed off under the Developer Certificate of Origin (a line "Signed-off-by: Name <email>" in each commit). The code of conduct is the Contributor Covenant, version 2.1; reports go to info@sanadprotocol.org.
 
 ## Standardisation
 
@@ -36,8 +36,8 @@ The planned route is a public specification, a reference implementation, a confo
 
 ## Security
 
-Report vulnerabilities in the specification or in reference code to security@sanadprotocol.org. See the [security page](/security/) for scope, response times and the measures of this website.
+Report vulnerabilities in the specification or in reference code to info@sanadprotocol.org. See the [security page](/security/) for scope, response times and the measures of this website.
 
 ## Contact
 
-contact@sanadprotocol.org. See also [Contact](/contact/).
+info@sanadprotocol.org. See also [Contact](/contact/).

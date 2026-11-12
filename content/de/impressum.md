@@ -13,7 +13,7 @@ Flat 1108, The Pad by Omniyat
 Dubai, Vereinigte Arabische Emirate
 (In den Vereinigten Arabischen Emiraten gibt es keine Postleitzahlen.)
 
-E-Mail: contact@sanadprotocol.org
+E-Mail: info@sanadprotocol.org
 
 ## Verantwortlich i. S. d. § 18 Abs. 2 MStV
 

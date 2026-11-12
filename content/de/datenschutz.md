@@ -10,20 +10,20 @@ toc: true
 <!-- glance -->
 - Die Seite setzt keine Cookies, verwendet keine Analyse und stellt keine Anfragen an andere Server, außer dem Kontaktformular, das erst beim Klick auf Senden an den eigenen Server des Projekts sendet.
 - Der Hosting-Anbieter GitHub Pages protokolliert IP-Adressen der Besucher aus Sicherheitsgründen.
-- Ihre Rechte können Sie per E-Mail an contact@sanadprotocol.org ausüben.
+- Ihre Rechte können Sie per E-Mail an info@sanadprotocol.org ausüben.
 <!-- /glance -->
 
 Eine englische Fassung gibt es unter [Privacy](/privacy/). Für Besucher in Deutschland ist der deutsche Text maßgeblich.
 
 ## Verantwortlicher
 
-Dr. Arash Kermani Kolankeh, Flat 1108, The Pad by Omniyat, Dubai, Vereinigte Arabische Emirate; contact@sanadprotocol.org. Siehe [Impressum](/de/impressum/).
+Dr. Arash Kermani Kolankeh, Flat 1108, The Pad by Omniyat, Dubai, Vereinigte Arabische Emirate; info@sanadprotocol.org. Siehe [Impressum](/de/impressum/).
 
 ## Was diese Website selbst tut
 
 Die Seiten sind statisch. Sie setzen **keine Cookies**, nutzen **keine Analyse-, Werbe- oder Tracking-Dienste**, laden **keine Schriften, Skripte oder eingebetteten Inhalte von anderen Servern** und stellen **keine Anfragen an andere Server**, außer dass die Kontaktseite die Nachricht des Besuchers an den Server des Projekts senden kann, wie unten beschrieben. Eine Content Security Policy in jeder Seite erzwingt das. Abgesehen von dieser Nachricht verarbeitet der Betreiber über die Seite selbst keine personenbezogenen Daten der Besucher.
 
-Die [Kontaktseite](/de/kontakt/) enthält ein Formular. Wenn der Besucher auf Senden klickt, übermittelt der Browser den Formularinhalt (Name und Antwortadresse, falls angegeben, Betreff, Nachricht) an den Server des Projekts unter rtc.kamangir.school und an keinen anderen Server. Der Server speichert die Nachricht, um sie zu beantworten, und leitet sie an das Projektpostfach weiter. Von der Adresse des Besuchers behält er nur einen gesalzenen Hashwert für die Begrenzung der Anfragenzahl, der nach 24 Stunden gelöscht wird. Nachrichten werden nach 12 Monaten gelöscht. Für eine frühere Löschung schreiben Sie an contact@sanadprotocol.org. Rechtsgrundlage ist die Anfrage des Besuchers und das Interesse des Verantwortlichen an ihrer Beantwortung, Art. 6 Abs. 1 lit. b und f DSGVO.
+Die [Kontaktseite](/de/kontakt/) enthält ein Formular. Wenn der Besucher auf Senden klickt, übermittelt der Browser den Formularinhalt (Name und Antwortadresse, falls angegeben, Betreff, Nachricht) an den Server des Projekts unter rtc.kamangir.school und an keinen anderen Server. Der Server speichert die Nachricht, um sie zu beantworten, und leitet sie an das Projektpostfach weiter. Von der Adresse des Besuchers behält er nur einen gesalzenen Hashwert für die Begrenzung der Anfragenzahl, der nach 24 Stunden gelöscht wird. Nachrichten werden nach 12 Monaten gelöscht. Für eine frühere Löschung schreiben Sie an info@sanadprotocol.org. Rechtsgrundlage ist die Anfrage des Besuchers und das Interesse des Verantwortlichen an ihrer Beantwortung, Art. 6 Abs. 1 lit. b und f DSGVO.
 
 ## Hosting und Server-Protokolle (GitHub Pages)
 
@@ -43,7 +43,7 @@ Links führen zu Seiten mit eigener Datenschutzpraxis. Sie sind als extern geken
 
 ## Ihre Rechte
 
-Sie haben das Recht auf Auskunft (Art. 15), Berichtigung (16), Löschung (17), Einschränkung der Verarbeitung (18), Mitteilung (19), Datenübertragbarkeit (20) und **Widerspruch** (21) sowie das Recht, sich bei einer Aufsichtsbehörde zu beschweren (Art. 77). Schreiben Sie an contact@sanadprotocol.org. Der Betreiber lebt in den Vereinigten Arabischen Emiraten; die zuständige Aufsichtsbehörde ist vom Verantwortlichen noch zu benennen. Besucher aus der Europäischen Union können sich auch an die Behörde ihres Landes wenden. Das Bundesdekret-Gesetz Nr. 45 von 2021 über den Schutz personenbezogener Daten der Vereinigten Arabischen Emirate kann ebenfalls gelten.
+Sie haben das Recht auf Auskunft (Art. 15), Berichtigung (16), Löschung (17), Einschränkung der Verarbeitung (18), Mitteilung (19), Datenübertragbarkeit (20) und **Widerspruch** (21) sowie das Recht, sich bei einer Aufsichtsbehörde zu beschweren (Art. 77). Schreiben Sie an info@sanadprotocol.org. Der Betreiber lebt in den Vereinigten Arabischen Emiraten; die zuständige Aufsichtsbehörde ist vom Verantwortlichen noch zu benennen. Besucher aus der Europäischen Union können sich auch an die Behörde ihres Landes wenden. Das Bundesdekret-Gesetz Nr. 45 von 2021 über den Schutz personenbezogener Daten der Vereinigten Arabischen Emirate kann ebenfalls gelten.
 
 ## Änderungen
 
