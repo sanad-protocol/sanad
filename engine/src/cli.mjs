@@ -11,6 +11,9 @@ import { prepareCommit, prepareReveal } from './attestor.mjs';
 import { createHttpServer } from './http.mjs';
 import { EngineError } from './errors.mjs';
 import { NOTICE, verifyCredential } from './bundle.mjs';
+import { buildBundleFiles, writeFiles, readBundlePath, verifyBundleFiles } from './export.mjs';
+import { publishCheckpoint, runWitness } from './witness.mjs';
+import { createResolver } from './keys.mjs';
 
 const USAGE = `sanad-engine <command>
 
@@ -30,6 +33,14 @@ const USAGE = `sanad-engine <command>
          [--pin-key <did>=<multibase>] [--dids <histories.json>] [--stats <file>] [--template <file>] [--allow-unpinned] [--allow-issuer-statistics]
          A policy is required: --policy <file> (all seven fields), or --use-recommended-policy to take the issuer's recommendation and the credential's date knowingly.
          Unpinned issuer or log key fails unless --allow-unpinned.
+  export <credential-id> --out <dir> [--base <url>] [--checkpoints <dir>] [--witness-dirs <dir,dir>]
+         write a self-contained static directory (bundles/<hash>/ and issuer.json) that any static host or git repository can serve
+  verify-bundle <dir> [the options of verify] [--witness <did,did> --require-witnesses <n>] [--min-identity A0|A1|A2] [--status-list <file>] [--require-status] [--now <iso>]
+         verify an exported directory with no server and no network (the directory is a bundle directory or a base directory holding bundles/)
+  publish-checkpoint --out <dir> [--daily] [--force] [--entries]   write the signed checkpoint to <dir>/checkpoints/ (daily: only if none of today exists)
+  witness --log <url|dir> --out <dir> --key <file> [--log-key <did>]   fetch the log's latest checkpoint, check it extends the stored one, cosign, store
+  revoke <credential-id> [--reason <text>]    set the credential's bit in the status list (needs statusUrl in config.json)
+  status publish --out <dir> [--ttl-hours <n>]   write the signed Bitstring Status List credential to <dir>/status/revocation.json
   log checkpoint | log inclusion --index <i> [--size <n>] | log consistency --m <m> [--n <n>]
   serve [--port <n>] [--host <addr>]          start the HTTP API and demonstration page (default 127.0.0.1:8787)
 
@@ -39,7 +50,7 @@ class Usage extends Error {}
 
 function parse(args) {
   const pos = [], opt = {};
-  const bool = new Set(['conflict', 'help', 'allow-shortfall', 'allow-unpinned', 'allow-issuer-statistics', 'use-recommended-policy']);
+  const bool = new Set(['conflict', 'help', 'allow-shortfall', 'allow-unpinned', 'allow-issuer-statistics', 'use-recommended-policy', 'daily', 'force', 'entries', 'require-status']);
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a.startsWith('--')) {
@@ -66,8 +77,9 @@ function openEngine(dir, clock) {
   const need = (f) => { const p = join(dir, f); if (!existsSync(p)) throw new EngineError('not_initialised', dir + ' is not initialised (run: sanad-engine init --dir ' + dir + ')'); return p; };
   const issuer = loadSigner(need('issuer.key.json')), logSigner = loadSigner(need('log.key.json'));
   const store = createFileStore(join(dir, 'store'));
-  const engine = createEngine({ store, issuer, logSigner, logId: readJson(need('config.json')).logId, ...(clock ? { clock } : {}) });
-  return { engine, store, dir, token: readFileSync(need('operator.token'), 'utf8').trim() };
+  const cfg = readJson(need('config.json'));
+  const engine = createEngine({ store, issuer, logSigner, logId: cfg.logId, ...(cfg.statusUrl ? { status: { url: cfg.statusUrl, ...(cfg.statusTtlHours ? { ttlHours: cfg.statusTtlHours } : {}) } } : {}), ...(clock ? { clock } : {}) });
+  return { engine, store, dir, issuer, token: readFileSync(need('operator.token'), 'utf8').trim() };
 }
 
 async function call(url, method, path, body) {
@@ -118,13 +130,12 @@ export async function main(argv, io = {}) {
       return 0;
     }
 
-    if (cmd === 'verify') {
-      const f = rest[0]; if (!f) throw new Usage('verify needs a credential file');
-      const doc = readJson(f);
+    if (cmd === 'verify' || cmd === 'verify-bundle') {
+      const f = rest[0]; if (!f) throw new Usage(cmd + ' needs a ' + (cmd === 'verify' ? 'credential file' : 'bundle directory'));
       const o = {};
       if (opt.policy) o.policy = readJson(opt.policy);
       else if (opt['use-recommended-policy']) { o.useRecommendedPolicy = true; out('NOTE  --use-recommended-policy: the template\'s recommended policy and the credential\'s date are used as the evaluation day. That is the issuer\'s recommendation, not a verifier policy.'); }
-      else throw new Usage('verify needs a policy: --policy <file> (all seven fields and asOf or --as-of), or --use-recommended-policy to take the issuer\'s recommendation knowingly');
+      else throw new Usage(cmd + ' needs a policy: --policy <file> (all seven fields and asOf or --as-of), or --use-recommended-policy to take the issuer\'s recommendation knowingly');
       if (opt['as-of']) o.asOf = opt['as-of'];
       // verify-only mode: no data directory is needed; the verifier pins the issuer and log key (DIDs) and, for did:web identities, the keys
       if (opt.issuer) o.trustedIssuers = [opt.issuer];
@@ -136,8 +147,14 @@ export async function main(argv, io = {}) {
       if (opt.template) o.template = readJson(opt.template);
       if (opt['allow-unpinned']) o.allowUnpinned = true;
       if (opt['allow-issuer-statistics']) o.allowIssuerStatistics = true;
+      if (opt['min-identity']) o.minIdentityLevel = opt['min-identity'];
+      if (opt.witness) o.trustedWitnesses = opt.witness.split(',');
+      if (opt['require-witnesses'] !== undefined) { if (!/^\d+$/.test(opt['require-witnesses'])) throw new Usage('--require-witnesses must be a number'); o.requireWitnesses = Number(opt['require-witnesses']); }
+      if (opt['status-list']) o.statusLists = opt['status-list'].split(',').map(readJson);
+      if (opt['require-status']) o.requireStatus = true;
+      if (opt.now) { o.now = Date.parse(opt.now); if (Number.isNaN(o.now)) throw new Usage('--now must be an ISO date-time'); }
       o.diagnose = true; // a local command: show every check, not only the first failure
-      const r = verifyCredential(doc, o);
+      const r = cmd === 'verify' ? verifyCredential(readJson(f), o) : verifyBundleFiles(readBundlePath(f), o);
       for (const c of r.checks) out((c.ok ? 'PASS  ' : 'FAIL  ') + c.name + '  ' + c.detail);
       for (const w of r.warnings) out('WARN  ' + w);
       if (r.recognition) {
@@ -146,6 +163,16 @@ export async function main(argv, io = {}) {
       }
       out('NOTICE  ' + NOTICE);
       return r.ok ? 0 : 1;
+    }
+
+    if (cmd === 'witness') {
+      const signer = loadSigner(need(opt, 'key'));
+      const resolver = createResolver(); // did:key log keys resolve by themselves; a did:web log key is not supported by the witness job yet
+      try {
+        const r = await runWitness({ source: need(opt, 'log'), outDir: resolve(need(opt, 'out')), signer, ...(opt['log-key'] ? { logKey: opt['log-key'] } : {}), resolver, ...(io.clock ? { now: io.clock.now() } : {}) });
+        out(`${r.status} size ${r.size} root ${r.rootHash}`);
+        return 0;
+      } catch (e) { if (e instanceof EngineError && e.code === 'witness_alert') { errOut('ALERT ' + e.message); return 3; } throw e; }
     }
 
     if (cmd === 'commit' || cmd === 'reveal') {
@@ -218,6 +245,30 @@ export async function main(argv, io = {}) {
         if (opt.out) { writeFileSync(opt.out, JSON.stringify(doc, null, 2) + '\n'); out('credential ' + doc.id + ' written to ' + opt.out); } else json(doc);
         if (doc.sanad.process.shortfall) errOut('WARN  finalized below the template minimum (recorded in the credential): ' + doc.sanad.process.shortfall.join('; '));
         errOut('NOTICE  ' + NOTICE);
+        return 0;
+      }
+      if (cmd === 'export') {
+        const cid = rest[0]; if (!cid) throw new Usage('export needs a credential id');
+        const { bundleHash, files } = buildBundleFiles({
+          engine, credentialId: cid, issuerSigner: ctx.issuer, ...(opt.base ? { base: opt.base } : {}), ...(opt.checkpoints ? { checkpointsDir: resolve(opt.checkpoints) } : {}),
+          ...(opt['witness-dirs'] ? { witnessDirs: opt['witness-dirs'].split(',').map((d) => resolve(d)) } : {}), now: io.clock ? io.clock.now() : Date.now(),
+        });
+        writeFiles(resolve(need(opt, 'out')), files);
+        out('exported urn:sanad:bundle:' + bundleHash + ' to ' + resolve(opt.out) + '/bundles/' + bundleHash + '/ (' + files.size + ' files)');
+        return 0;
+      }
+      if (cmd === 'publish-checkpoint') {
+        const r = publishCheckpoint({ engine, dir: resolve(need(opt, 'out')), daily: opt.daily === true, force: opt.force === true, entries: opt.entries === true });
+        out(r.published ? 'published checkpoint of size ' + r.size + ' to ' + r.file : 'not published: ' + r.reason);
+        return 0;
+      }
+      if (cmd === 'revoke') { if (!rest[0]) throw new Usage('revoke needs a credential id'); json(engine.revokeCredential(rest[0], { reason: opt.reason })); return 0; }
+      if (cmd === 'status' && rest[0] === 'publish') {
+        const list = engine.statusListCredential(opt['ttl-hours'] ? { ttlHours: Number(opt['ttl-hours']) } : {});
+        const f = join(resolve(need(opt, 'out')), 'status', 'revocation.json');
+        mkdirSync(join(resolve(opt.out), 'status'), { recursive: true });
+        writeFileSync(f, JSON.stringify(list, null, 2) + '\n');
+        out('status list written to ' + f + ' (valid until ' + list.validUntil + ')');
         return 0;
       }
       if (cmd === 'log') {

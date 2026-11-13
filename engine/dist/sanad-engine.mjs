@@ -917,10 +917,93 @@ function checkReveal({ statement, invitation, storedCommit, evidenceDate, reveal
   if (s.commit !== storedCommit || commitFor(s) !== storedCommit) throw new EngineError("commit_mismatch", "the reveal does not match the stored commit");
 }
 
-// engine/src/template.mjs
+// engine/src/evidence.mjs
+var HEX642 = /^[0-9a-f]{64}$/;
 var ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
-var KINDS2 = ["auto", "sitting", "artifact", "peer"];
+var METHOD_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 var isObj3 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+var exactly2 = (o, names) => {
+  const k = Object.keys(o).sort();
+  const n = [...names].sort();
+  return k.length === n.length && k.every((x, i) => x === n[i]);
+};
+var IDENTITY_LEVELS = ["A0", "A1", "A2"];
+var identityRank = (level) => IDENTITY_LEVELS.indexOf(level);
+var IDENTITY_TYP = "sanad-identity+jws";
+var SITTING_MEMBERS = ["sittingId", "paperFingerprint", "strokeLogHead", "recordingSha256", "recordingCipherSha256", "recordingBytes", "identityAssurance", "publication"];
+var PUBLICATION_SCOPES = ["hashes", "bundle"];
+function identityStatement({ sittingId, level, method, checkedBy, date, candidateKey }) {
+  return { type: "sanad-identity", sittingId, level, method, checkedBy, date, candidateKey };
+}
+function signIdentityAssurance({ signer, sittingId, level, method, date, candidateKey }) {
+  const st = identityStatement({ sittingId, level, method, checkedBy: signer.did, date, candidateKey });
+  return { level, method, checkedBy: signer.did, date, candidateKey, signature: signer.sign(IDENTITY_TYP, st) };
+}
+var keyOk = (mb) => {
+  try {
+    if (typeof mb !== "string" || !mb.startsWith("z") || mb.length > 80) return false;
+    const raw = base58btcDecode(mb.slice(1));
+    return raw.length === 32 && !isSmallOrderKey(raw);
+  } catch {
+    return false;
+  }
+};
+function sittingProblems(body) {
+  const p = [];
+  if (!isObj3(body)) return ["body must be an object"];
+  const hex = (k) => {
+    if (k in body && !(typeof body[k] === "string" && HEX642.test(body[k]))) p.push(k + " must be 64 lower-case hex characters");
+  };
+  if ("sittingId" in body && !(typeof body.sittingId === "string" && ID_RE.test(body.sittingId))) p.push("sittingId must match " + ID_RE);
+  hex("paperFingerprint");
+  hex("strokeLogHead");
+  hex("recordingSha256");
+  hex("recordingCipherSha256");
+  if ("recordingCipherSha256" in body && !("recordingSha256" in body)) p.push("recordingCipherSha256 needs recordingSha256");
+  if ("recordingBytes" in body && !(Number.isSafeInteger(body.recordingBytes) && body.recordingBytes > 0)) p.push("recordingBytes must be a positive integer");
+  if ("recordingSha256" in body && !("recordingBytes" in body)) p.push("recordingSha256 needs recordingBytes (a positive integer)");
+  if ("recordingBytes" in body && !("recordingSha256" in body)) p.push("recordingBytes without recordingSha256");
+  if ("identityAssurance" in body) {
+    const ia = body.identityAssurance;
+    if (!isObj3(ia) || !exactly2(ia, ["level", "method", "checkedBy", "date", "candidateKey", "signature"])) p.push("identityAssurance has exactly level, method, checkedBy, date, candidateKey, signature");
+    else {
+      if (!IDENTITY_LEVELS.includes(ia.level)) p.push("identityAssurance.level must be one of " + IDENTITY_LEVELS.join(", "));
+      if (!(typeof ia.method === "string" && METHOD_RE.test(ia.method))) p.push("identityAssurance.method must match " + METHOD_RE);
+      if (!(typeof ia.checkedBy === "string" && /^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(ia.checkedBy) && ia.checkedBy.length <= 200)) p.push("identityAssurance.checkedBy must be a DID");
+      if (!isIsoDate(ia.date)) p.push("identityAssurance.date must be YYYY-MM-DD");
+      if (!keyOk(ia.candidateKey)) p.push("identityAssurance.candidateKey must be a multibase (z, base58btc) Ed25519 public key");
+      if (typeof ia.signature !== "string" || ia.signature.length === 0 || ia.signature.length > 400) p.push("identityAssurance.signature must be a detached JWS");
+      if (!("sittingId" in body)) p.push("identityAssurance needs sittingId (the statement is bound to the sitting)");
+    }
+  }
+  if ("publication" in body) {
+    const pb = body.publication;
+    if (!isObj3(pb) || !Object.keys(pb).every((k) => ["scope", "url", "date"].includes(k)) || !("scope" in pb) || !("date" in pb)) p.push("publication has scope and date, and optionally url");
+    else {
+      if (!PUBLICATION_SCOPES.includes(pb.scope)) p.push("publication.scope must be one of " + PUBLICATION_SCOPES.join(", "));
+      if (!isIsoDate(pb.date)) p.push("publication.date must be YYYY-MM-DD");
+      if ("url" in pb && !(typeof pb.url === "string" && /^https?:\/\/[^\s]{1,300}$/.test(pb.url))) p.push("publication.url must be an http or https URL (the base of the static mirror)");
+    }
+  }
+  return p;
+}
+var REQUIRE_FLAGS = { requireRecordingHash: "recordingSha256", requireStrokeLogHead: "strokeLogHead", requireIdentityAssurance: "identityAssurance" };
+function missingRequired(body, item) {
+  if (!isObj3(item)) return [];
+  return Object.entries(REQUIRE_FLAGS).filter(([flag, member]) => item[flag] === true && !(isObj3(body) && member in body)).map(([, member]) => member);
+}
+function checkIdentitySignature(body, resolver) {
+  const ia = body?.identityAssurance;
+  if (!isObj3(ia)) return { ok: false, reason: "no identityAssurance" };
+  const st = identityStatement({ sittingId: body.sittingId, level: ia.level, method: ia.method, checkedBy: ia.checkedBy, date: ia.date, candidateKey: ia.candidateKey });
+  const r = resolver.verifyStatement({ jws: ia.signature, payload: st, typ: IDENTITY_TYP, signer: ia.checkedBy, date: ia.date });
+  return r.ok ? { ok: true } : { ok: false, reason: r.reason };
+}
+
+// engine/src/template.mjs
+var ID_RE2 = /^[A-Za-z0-9._:-]{1,200}$/;
+var KINDS2 = ["auto", "sitting", "artifact", "peer"];
+var isObj4 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 var isStr2 = (v) => typeof v === "string" && v.length > 0;
 var isLevel = (v) => Number.isInteger(v) && v >= 0 && v <= 5;
 var isNum2 = (v) => typeof v === "number" && Number.isFinite(v);
@@ -929,7 +1012,7 @@ function jsonSafe(v, depth = 0) {
   if (v === null || typeof v === "string" || typeof v === "boolean") return true;
   if (typeof v === "number") return Number.isFinite(v);
   if (Array.isArray(v)) return v.every((x) => jsonSafe(x, depth + 1));
-  if (isObj3(v) && [Object.prototype, null].includes(Object.getPrototypeOf(v))) return Object.keys(v).every((k) => jsonSafe(v[k], depth + 1));
+  if (isObj4(v) && [Object.prototype, null].includes(Object.getPrototypeOf(v))) return Object.keys(v).every((k) => jsonSafe(v[k], depth + 1));
   return false;
 }
 var MAX_HOURS = 87600;
@@ -940,21 +1023,21 @@ function closed(o, required, optional, where, errors) {
 var POLICY_FIELDS = ["minAttestors", "requireLive", "halfLifeMonths", "minAttestorSittings", "minAgreement", "maxInferenceDepth", "inferenceDecay"];
 function validateTemplate(t) {
   const errors = [];
-  if (!isObj3(t)) return { ok: false, errors: ["template must be an object"] };
+  if (!isObj4(t)) return { ok: false, errors: ["template must be an object"] };
   closed(t, ["id", "version", "title", "skill", "levels", "evidence", "attestors", "liveSitting", "deadlines", "policy"], ["rubric", "description", "levelMap"], "template", errors);
-  if ("id" in t && !(typeof t.id === "string" && ID_RE.test(t.id))) errors.push("id: must match " + ID_RE);
+  if ("id" in t && !(typeof t.id === "string" && ID_RE2.test(t.id))) errors.push("id: must match " + ID_RE2);
   if ("version" in t && !(Number.isInteger(t.version) && t.version >= 1)) errors.push("version: must be an integer of at least 1");
   if ("title" in t && !isStr2(t.title)) errors.push("title: must be a non-empty string");
   if ("description" in t && typeof t.description !== "string") errors.push("description: must be a string");
   if ("skill" in t) {
     const s = t.skill;
-    if (!isObj3(s)) errors.push("skill: must be an object");
+    if (!isObj4(s)) errors.push("skill: must be an object");
     else {
       closed(s, ["id", "title"], ["graphHash", "xwalk"], "skill", errors);
-      if ("id" in s && !(typeof s.id === "string" && ID_RE.test(s.id))) errors.push("skill.id: must match " + ID_RE);
+      if ("id" in s && !(typeof s.id === "string" && ID_RE2.test(s.id))) errors.push("skill.id: must match " + ID_RE2);
       if ("title" in s && !isStr2(s.title)) errors.push("skill.title: must be a non-empty string");
       if ("graphHash" in s && !isStr2(s.graphHash)) errors.push("skill.graphHash: must be a non-empty string");
-      if ("xwalk" in s && !(isObj3(s.xwalk) && jsonSafe(s.xwalk))) errors.push("skill.xwalk: must be an object of plain JSON values (finite numbers, nesting up to 12)");
+      if ("xwalk" in s && !(isObj4(s.xwalk) && jsonSafe(s.xwalk))) errors.push("skill.xwalk: must be an object of plain JSON values (finite numbers, nesting up to 12)");
     }
   }
   if ("levels" in t) {
@@ -963,7 +1046,7 @@ function validateTemplate(t) {
       const seen = /* @__PURE__ */ new Set();
       t.levels.forEach((l, i) => {
         const w = "levels[" + i + "]";
-        if (!isObj3(l)) {
+        if (!isObj4(l)) {
           errors.push(w + ": must be an object");
           return;
         }
@@ -983,19 +1066,19 @@ function validateTemplate(t) {
       const seen = /* @__PURE__ */ new Set();
       t.rubric.forEach((r, i) => {
         const w = "rubric[" + i + "]";
-        if (!isObj3(r)) {
+        if (!isObj4(r)) {
           errors.push(w + ": must be an object");
           return;
         }
         closed(r, ["id", "criterion", "descriptors"], [], w, errors);
         if ("id" in r) {
-          if (!(typeof r.id === "string" && ID_RE.test(r.id))) errors.push(w + ".id: must match " + ID_RE);
+          if (!(typeof r.id === "string" && ID_RE2.test(r.id))) errors.push(w + ".id: must match " + ID_RE2);
           else if (seen.has(r.id)) errors.push(w + ".id: duplicate id");
           else seen.add(r.id);
         }
         if ("criterion" in r && !isStr2(r.criterion)) errors.push(w + ".criterion: must be a non-empty string");
         if ("descriptors" in r) {
-          if (!isObj3(r.descriptors)) errors.push(w + ".descriptors: must be an object");
+          if (!isObj4(r.descriptors)) errors.push(w + ".descriptors: must be an object");
           else for (const [k, v] of Object.entries(r.descriptors)) {
             if (!/^[0-5]$/.test(k)) errors.push(w + '.descriptors: key "' + k + '" is not a level from 0 to 5');
             if (typeof v !== "string") errors.push(w + ".descriptors." + k + ": must be a string");
@@ -1011,14 +1094,14 @@ function validateTemplate(t) {
       const seen = /* @__PURE__ */ new Set();
       t.evidence.forEach((e, i) => {
         const w = "evidence[" + i + "]";
-        if (!isObj3(e)) {
+        if (!isObj4(e)) {
           errors.push(w + ": must be an object");
           return;
         }
-        closed(e, ["key", "kind", "summary"], ["live", "minutes"], w, errors);
+        closed(e, ["key", "kind", "summary"], ["live", "minutes", ...Object.keys(REQUIRE_FLAGS)], w, errors);
         if ("key" in e) {
           if (typeof e.key === "string" && /^a\d{2,}$/.test(e.key)) errors.push(w + '.key: "' + e.key + '" looks like an attestation id (a01, a02, ...) and would collide with one');
-          else if (!(typeof e.key === "string" && ID_RE.test(e.key))) errors.push(w + ".key: must match " + ID_RE);
+          else if (!(typeof e.key === "string" && ID_RE2.test(e.key))) errors.push(w + ".key: must match " + ID_RE2);
           else if (seen.has(e.key)) errors.push(w + ".key: duplicate key");
           else seen.add(e.key);
         }
@@ -1029,12 +1112,16 @@ function validateTemplate(t) {
         if ("summary" in e && typeof e.summary !== "string") errors.push(w + ".summary: must be a string");
         if ("live" in e && typeof e.live !== "boolean") errors.push(w + ".live: must be true or false");
         if ("minutes" in e && !(isNum2(e.minutes) && e.minutes > 0)) errors.push(w + ".minutes: must be a positive number");
+        for (const f of Object.keys(REQUIRE_FLAGS)) if (f in e) {
+          if (typeof e[f] !== "boolean") errors.push(w + "." + f + ": must be true or false");
+          else if (e.kind !== "sitting") errors.push(w + "." + f + ": only an evidence item of kind sitting can carry it");
+        }
       });
     }
   }
   if ("attestors" in t) {
     const a = t.attestors;
-    if (!isObj3(a)) errors.push("attestors: must be an object");
+    if (!isObj4(a)) errors.push("attestors: must be an object");
     else {
       closed(a, ["min", "max", "roles"], [], "attestors", errors);
       const okMin = Number.isInteger(a.min) && a.min >= 1, okMax = Number.isInteger(a.max) && a.max >= 1;
@@ -1056,14 +1143,14 @@ function validateTemplate(t) {
   }
   if ("deadlines" in t) {
     const d = t.deadlines;
-    if (!isObj3(d)) errors.push("deadlines: must be an object");
+    if (!isObj4(d)) errors.push("deadlines: must be an object");
     else {
       closed(d, ["commitHours", "revealHours"], [], "deadlines", errors);
       for (const k of ["commitHours", "revealHours"]) if (k in d && !(isNum2(d[k]) && d[k] > 0 && d[k] <= MAX_HOURS)) errors.push("deadlines." + k + ": must be a positive number of at most " + MAX_HOURS);
     }
   }
   if ("levelMap" in t) {
-    if (!isObj3(t.levelMap)) errors.push("levelMap: must be an object");
+    if (!isObj4(t.levelMap)) errors.push("levelMap: must be an object");
     else for (const [k, v] of Object.entries(t.levelMap)) {
       if (!/^[A-Za-z0-9]{1,16}$/.test(k)) errors.push('levelMap: key "' + k + '" must be 1 to 16 letters or digits (it is written into the nonce)');
       if (k in Object.prototype) errors.push('levelMap: key "' + k + '" is reserved');
@@ -1072,10 +1159,10 @@ function validateTemplate(t) {
   }
   if ("policy" in t) {
     const p = t.policy;
-    if (!isObj3(p)) errors.push("policy: must be an object");
+    if (!isObj4(p)) errors.push("policy: must be an object");
     else {
       closed(p, ["id", ...POLICY_FIELDS], [], "policy", errors);
-      if ("id" in p && !(typeof p.id === "string" && ID_RE.test(p.id))) errors.push("policy.id: must match " + ID_RE);
+      if ("id" in p && !(typeof p.id === "string" && ID_RE2.test(p.id))) errors.push("policy.id: must match " + ID_RE2);
       const num = (k, ok, what) => {
         if (k in p && !(isNum2(p[k]) && ok(p[k]))) errors.push("policy." + k + ": must be " + what);
       };
@@ -1170,7 +1257,7 @@ function attestorStats(records) {
 
 // engine/src/log.mjs
 import { createHash } from "node:crypto";
-var HEX642 = /^[0-9a-f]{64}$/;
+var HEX643 = /^[0-9a-f]{64}$/;
 var KINDS3 = ["commit", "attestation", "missing-reveal", "bundle"];
 var sha = (...parts) => {
   const h = createHash("sha256");
@@ -1230,7 +1317,7 @@ function isIsoTime(ts) {
   if (d > new Date(Date.UTC(2e3 + y % 400, mo, 0)).getUTCDate()) return false;
   return !Number.isNaN(Date.parse(ts));
 }
-var okHex = (h) => typeof h === "string" && HEX642.test(h);
+var okHex = (h) => typeof h === "string" && HEX643.test(h);
 var okProof = (p) => Array.isArray(p) && p.every(okHex);
 var isSize = (x) => Number.isSafeInteger(x) && x >= 0;
 var half = (x) => Math.floor(x / 2);
@@ -1289,7 +1376,7 @@ function verifyConsistency(arg) {
 }
 function leafBytes({ kind, ref, ts } = {}) {
   if (!KINDS3.includes(kind)) throw new EngineError("bad_leaf", "unknown leaf kind");
-  if (typeof ref !== "string" || !HEX642.test(ref)) throw new EngineError("bad_leaf", "ref must be 64 lowercase hex characters");
+  if (typeof ref !== "string" || !HEX643.test(ref)) throw new EngineError("bad_leaf", "ref must be 64 lowercase hex characters");
   if (!isIsoTime(ts)) throw new EngineError("bad_leaf", "ts must be an ISO date-time");
   return canonical({ kind, ref, ts });
 }
@@ -1819,15 +1906,310 @@ function openStore(spec) {
 
 // engine/src/bundle.mjs
 import { randomUUID } from "node:crypto";
+
+// engine/src/witness.mjs
+import { readFileSync as readFileSync2, writeFileSync as writeFileSync2, mkdirSync as mkdirSync2, existsSync as existsSync2, readdirSync as readdirSync2, renameSync as renameSync2 } from "node:fs";
+import { join as join2, dirname } from "node:path";
+var COSIGN_TYP = "sanad-cosignature+jws";
+var HEX644 = /^[0-9a-f]{64}$/;
+var isObj5 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+var err = (code, message, status = 400) => new EngineError(code, message, status);
+var jsonText = (v) => JSON.stringify(v, null, 2) + "\n";
+var day = (iso) => String(iso).slice(0, 10);
+function writeAtomic(file, text) {
+  mkdirSync2(dirname(file), { recursive: true });
+  const tmp = file + ".tmp-" + process.pid;
+  writeFileSync2(tmp, text);
+  renameSync2(tmp, file);
+}
+var readJsonFile = (f) => JSON.parse(readFileSync2(f, "utf8"));
+function publishCheckpoint({ engine, dir, daily = false, force = false, entries = false }) {
+  const cdir = join2(dir, "checkpoints"), indexFile = join2(cdir, "index.json");
+  const index = existsSync2(indexFile) ? readJsonFile(indexFile) : [];
+  if (!Array.isArray(index)) throw err("bad_publication", "checkpoints/index.json is not a list");
+  const last = index.length ? index[index.length - 1] : null;
+  const cp = engine.log.checkpoint();
+  if (cp.payload.size === 0) return { published: false, reason: "the log is empty: nothing to publish" };
+  if (last && cp.payload.size < last.size) throw err("log_shrank", `the log has ${cp.payload.size} entries but checkpoint ${last.size} was published: refusing to publish a smaller log`, 409);
+  if (!force && last) {
+    if (cp.payload.size === last.size && cp.payload.rootHash === last.rootHash) return { published: false, reason: "unchanged since the last published checkpoint (size " + last.size + ")", size: last.size };
+    if (cp.payload.size === last.size) throw err("log_forked", `the log has ${last.size} entries with a different root than the published checkpoint`, 409);
+    if (daily && day(cp.payload.timestamp) === day(last.timestamp)) return { published: false, reason: "a checkpoint of " + day(last.timestamp) + " is already published", size: last.size };
+  }
+  let previous = null, consistency = [];
+  if (last && cp.payload.size > last.size) {
+    const c = engine.log.consistency(last.size, cp.payload.size);
+    if (c.rootM !== last.rootHash) throw err("log_forked", "the log does not reproduce the root of the published checkpoint of size " + last.size, 409);
+    previous = { size: last.size, rootHash: last.rootHash };
+    consistency = c.proof;
+  } else if (last) {
+    const f = join2(cdir, last.size + ".json");
+    if (existsSync2(f)) {
+      const o = readJsonFile(f);
+      previous = o.previous ?? null;
+      consistency = o.consistency ?? [];
+    }
+  }
+  const body = { checkpoint: cp, previous, consistency };
+  const file = join2(cdir, cp.payload.size + ".json");
+  writeAtomic(file, jsonText(body));
+  writeAtomic(join2(cdir, "latest.json"), jsonText(body));
+  if (!last || last.size !== cp.payload.size) index.push({ size: cp.payload.size, timestamp: cp.payload.timestamp, rootHash: cp.payload.rootHash });
+  else index[index.length - 1] = { size: cp.payload.size, timestamp: cp.payload.timestamp, rootHash: cp.payload.rootHash };
+  writeAtomic(indexFile, jsonText(index));
+  if (entries) writeAtomic(join2(dir, "log", "entries.json"), jsonText(engine.log.entries(0, cp.payload.size)));
+  return { published: true, size: cp.payload.size, file };
+}
+function cosignStatement({ checkpoint, logKey, witness, witnessedAt }) {
+  const p = checkpoint.payload;
+  return { type: "sanad-cosignature", logId: p.logId, size: p.size, rootHash: p.rootHash, timestamp: p.timestamp, logKey, witness, witnessedAt };
+}
+function makeCosignature({ signer, checkpoint, logKey, now }) {
+  const witnessedAt = new Date(now).toISOString();
+  return { witness: signer.did, witnessedAt, jws: signer.sign(COSIGN_TYP, cosignStatement({ checkpoint, logKey, witness: signer.did, witnessedAt })) };
+}
+function verifyCosignature({ checkpoint, cosignature, logKey, resolver }) {
+  try {
+    if (!isObj5(cosignature) || Object.keys(cosignature).sort().join() !== "jws,witness,witnessedAt" || !isIsoTime(cosignature.witnessedAt)) return { ok: false, reason: "malformed" };
+    const r = resolver.verifyStatement({ jws: cosignature.jws, payload: cosignStatement({ checkpoint, logKey, witness: cosignature.witness, witnessedAt: cosignature.witnessedAt }), typ: COSIGN_TYP, signer: cosignature.witness, date: day(cosignature.witnessedAt) });
+    return r.ok ? { ok: true } : { ok: false, reason: r.reason };
+  } catch {
+    return { ok: false, reason: "malformed" };
+  }
+}
+function verifyWitnesses({ checkpoint, logKey, resolver, cosigned, consistency = [], trusted }) {
+  const problems = [], seen = /* @__PURE__ */ new Set();
+  if (!Array.isArray(trusted) || trusted.length === 0) return { count: 0, witnesses: [], problems: ["no witness is pinned (trustedWitnesses): a cosignature by an unknown witness proves nothing"] };
+  const base = checkpoint.payload;
+  for (const [i, item] of (Array.isArray(cosigned) ? cosigned : []).entries()) {
+    const w = item?.cosignature?.witness;
+    const bad2 = (m) => problems.push(`cosignature ${i}${typeof w === "string" ? " (" + w + ")" : ""}: ${m}`);
+    if (!isObj5(item) || !isObj5(item.checkpoint) || !isObj5(item.cosignature)) {
+      bad2("malformed");
+      continue;
+    }
+    if (!trusted.includes(w)) {
+      bad2("witness is not pinned");
+      continue;
+    }
+    if (seen.has(w)) continue;
+    const cp = item.checkpoint;
+    if (!verifyCheckpoint(cp, (jws, payload, typ) => resolver.verifyStatement({ jws, payload, typ, signer: logKey, date: day(payload.timestamp) }).ok)) {
+      bad2("the cosigned checkpoint is not signed by the log key");
+      continue;
+    }
+    if (cp.payload.logId !== base.logId) {
+      bad2("the cosigned checkpoint belongs to another log");
+      continue;
+    }
+    const cs = verifyCosignature({ checkpoint: cp, cosignature: item.cosignature, logKey, resolver });
+    if (!cs.ok) {
+      bad2("signature refused (" + cs.reason + ")");
+      continue;
+    }
+    if (cp.payload.size < base.size) {
+      bad2(`cosigned size ${cp.payload.size} is smaller than the credential's checkpoint (${base.size})`);
+      continue;
+    }
+    if (cp.payload.size === base.size) {
+      if (cp.payload.rootHash !== base.rootHash) {
+        bad2("same size, different root: the log forked");
+        continue;
+      }
+    } else {
+      const c = consistency.find((x) => x && x.m === base.size && x.n === cp.payload.size && x.rootM === base.rootHash && x.rootN === cp.payload.rootHash);
+      if (!c || !verifyConsistency(c)) {
+        bad2("no valid consistency proof from the credential's checkpoint to the cosigned one");
+        continue;
+      }
+    }
+    seen.add(w);
+  }
+  return { count: seen.size, witnesses: [...seen].sort(), problems };
+}
+async function readSource(source, rel, fetchImpl = globalThis.fetch) {
+  if (/^https?:\/\//.test(source)) {
+    const r = await fetchImpl(source.replace(/\/+$/, "") + "/" + rel, { redirect: "follow" });
+    if (!r.ok) throw err("source_unavailable", `${source}/${rel}: HTTP ${r.status}`, 502);
+    return JSON.parse(await r.text());
+  }
+  const f = join2(source, rel);
+  if (!existsSync2(f)) throw err("source_unavailable", f + " does not exist", 502);
+  return readJsonFile(f);
+}
+var publishedFileOk = (f) => isObj5(f) && isObj5(f.checkpoint) && (f.previous === null || isObj5(f.previous) && Number.isInteger(f.previous.size) && HEX644.test(f.previous.rootHash)) && Array.isArray(f.consistency);
+async function runWitness({ source, outDir, signer, logKey, resolver = createResolver(), now = Date.now(), fetchImpl }) {
+  const latestFile = await readSource(source, "checkpoints/latest.json", fetchImpl);
+  if (!publishedFileOk(latestFile)) throw err("bad_checkpoint", "checkpoints/latest.json is malformed");
+  const cp = latestFile.checkpoint, logId = cp.payload?.logId;
+  if (typeof logId !== "string" || !/^[A-Za-z0-9._:-]{1,200}$/.test(logId)) throw err("bad_checkpoint", "the checkpoint has no usable logId");
+  const wdir = join2(outDir, logId);
+  const pinFile = join2(wdir, "pin.json");
+  const stored = existsSync2(pinFile) ? readJsonFile(pinFile).logKey : null;
+  if (stored && logKey && stored !== logKey) throw err("bad_pin", `${pinFile} pins ${stored}; --log-key says ${logKey}`);
+  const pin = stored ?? logKey;
+  if (!pin) throw err("bad_pin", "the first run needs the log key to trust (--log-key <did>); it is stored afterwards");
+  const sigOk = (c) => verifyCheckpoint(c, (jws, payload, typ) => resolver.verifyStatement({ jws, payload, typ, signer: pin, date: day(payload.timestamp) }).ok);
+  if (!sigOk(cp)) throw err("bad_checkpoint", "the latest checkpoint is not signed by the pinned log key " + pin);
+  const alert = (reason, extra) => {
+    const a = { type: "sanad-witness-alert", reason, witness: signer.did, at: new Date(now).toISOString(), latest: cp, ...extra };
+    const f = join2(wdir, "ALERT-" + a.at.replace(/[:.]/g, "-") + ".json");
+    writeAtomic(f, jsonText(a));
+    throw err("witness_alert", reason + " (evidence written to " + f + ")", 409);
+  };
+  const ownFile = join2(wdir, "latest.json");
+  const own = existsSync2(ownFile) ? readJsonFile(ownFile) : null;
+  let chain = [];
+  if (own) {
+    const m = own.checkpoint.payload;
+    if (!sigOk(own.checkpoint)) throw err("bad_pin", "the stored checkpoint does not verify with the pinned log key: " + ownFile);
+    if (cp.payload.size < m.size) alert(`the log went backwards: it published ${cp.payload.size} entries, the witness had cosigned ${m.size}`, { stored: own.checkpoint });
+    if (cp.payload.size === m.size) {
+      if (cp.payload.rootHash !== m.rootHash) alert("the log forked: same size " + m.size + " with a different root", { stored: own.checkpoint });
+      return { status: "unchanged", size: m.size, rootHash: m.rootHash };
+    }
+    let index = null;
+    try {
+      index = await readSource(source, "checkpoints/index.json", fetchImpl);
+    } catch {
+      index = null;
+    }
+    const sizes = Array.isArray(index) ? index.map((e) => e.size).filter((n) => Number.isInteger(n) && n > m.size && n < cp.payload.size).sort((a, b) => a - b) : [];
+    const files = [];
+    for (const n of sizes) files.push(await readSource(source, `checkpoints/${n}.json`, fetchImpl));
+    files.push(latestFile);
+    let from = { size: m.size, rootHash: m.rootHash };
+    for (const f of files) {
+      if (!publishedFileOk(f) || !sigOk(f.checkpoint)) alert("a published checkpoint between the stored one and the latest is malformed or not signed by the pinned key", { stored: own.checkpoint });
+      const to = f.checkpoint.payload;
+      if (!f.previous || f.previous.size !== from.size || f.previous.rootHash !== from.rootHash) alert(`the published chain does not link to the stored checkpoint (size ${from.size}): the log's history is not provably unchanged`, { stored: own.checkpoint });
+      if (!verifyConsistency({ m: from.size, n: to.size, proof: f.consistency, rootM: from.rootHash, rootN: to.rootHash })) alert(`the consistency proof from ${from.size} to ${to.size} fails: the log was rewritten`, { stored: own.checkpoint });
+      from = { size: to.size, rootHash: to.rootHash };
+      chain.push(f);
+    }
+  }
+  const cosignature = makeCosignature({ signer, checkpoint: cp, logKey: pin, now });
+  const record2 = { checkpoint: cp, cosignature, chain: chain.map((f) => ({ checkpoint: f.checkpoint, previous: f.previous, consistency: f.consistency })) };
+  mkdirSync2(wdir, { recursive: true });
+  if (!existsSync2(pinFile)) writeAtomic(pinFile, jsonText({ logKey: pin }));
+  writeAtomic(join2(wdir, cp.payload.size + ".json"), jsonText(record2));
+  writeAtomic(ownFile, jsonText(record2));
+  writeAtomic(join2(outDir, "witness.json"), jsonText({ type: "sanad-witness-card", version: 1, witness: signer.did, logs: listLogs(outDir) }));
+  return { status: "cosigned", size: cp.payload.size, rootHash: cp.payload.rootHash };
+}
+function listLogs(outDir) {
+  try {
+    return readdirSync2(outDir, { withFileTypes: true }).filter((d) => d.isDirectory() && existsSync2(join2(outDir, d.name, "latest.json"))).map((d) => d.name).sort();
+  } catch {
+    return [];
+  }
+}
+function readWitnessDir(dir, logId) {
+  const wdir = join2(dir, logId);
+  if (!existsSync2(wdir)) return [];
+  return readdirSync2(wdir).filter((n) => /^\d+\.json$/.test(n)).sort((a, b) => Number(a.slice(0, -5)) - Number(b.slice(0, -5))).map((n) => {
+    const r = readJsonFile(join2(wdir, n));
+    return { checkpoint: r.checkpoint, cosignature: r.cosignature };
+  });
+}
+
+// engine/src/statuslist.mjs
+import { gzipSync, gunzipSync } from "node:zlib";
+var STATUS_LIST_TYP = "sanad-status-list+jws";
+var MIN_LIST_BITS = 131072;
+var MAX_LIST_BITS = 1 << 27;
+var isObj6 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+var exactly3 = (o, names) => {
+  const k = Object.keys(o).sort();
+  const n = [...names].sort();
+  return k.length === n.length && k.every((x, i) => x === n[i]);
+};
+function newBitstring(bits = MIN_LIST_BITS) {
+  if (!Number.isInteger(bits) || bits < MIN_LIST_BITS || bits > MAX_LIST_BITS) throw new RangeError("a status list holds " + MIN_LIST_BITS + " to " + MAX_LIST_BITS + " bits");
+  return new Uint8Array(Math.ceil(bits / 8));
+}
+function setBit(bytes, index, value = true) {
+  if (!Number.isInteger(index) || index < 0 || index >= bytes.length * 8) throw new RangeError("index outside the list");
+  const m = 128 >> index % 8;
+  if (value) bytes[index >> 3] |= m;
+  else bytes[index >> 3] &= ~m;
+}
+function getBit(bytes, index) {
+  if (!Number.isInteger(index) || index < 0 || index >= bytes.length * 8) throw new RangeError("index outside the list");
+  return (bytes[index >> 3] & 128 >> index % 8) !== 0;
+}
+function encodeList(bytes) {
+  return "u" + b64u(gzipSync(Buffer.from(bytes)));
+}
+function decodeList(encoded) {
+  if (typeof encoded !== "string" || encoded[0] !== "u") throw new Error("encodedList must be multibase base64url (prefix u)");
+  const raw = gunzipSync(Buffer.from(fromB64u(encoded.slice(1))), { maxOutputLength: MAX_LIST_BITS / 8 });
+  if (raw.length * 8 < MIN_LIST_BITS) throw new Error("the list is shorter than " + MIN_LIST_BITS + " bits");
+  return new Uint8Array(raw);
+}
+function statusEntry({ listUrl, index }) {
+  return { id: listUrl + "#" + index, type: "BitstringStatusListEntry", statusPurpose: "revocation", statusListIndex: String(index), statusListCredential: listUrl };
+}
+function statusEntryProblems(e) {
+  if (!isObj6(e) || !exactly3(e, ["id", "type", "statusPurpose", "statusListIndex", "statusListCredential"])) return ["credentialStatus has exactly id, type, statusPurpose, statusListIndex, statusListCredential"];
+  const p = [];
+  if (e.type !== "BitstringStatusListEntry") p.push("credentialStatus.type must be BitstringStatusListEntry");
+  if (e.statusPurpose !== "revocation") p.push("credentialStatus.statusPurpose must be revocation");
+  if (!(typeof e.statusListIndex === "string" && /^(0|[1-9]\d{0,8})$/.test(e.statusListIndex))) p.push("credentialStatus.statusListIndex must be a decimal string");
+  if (!(typeof e.statusListCredential === "string" && /^https?:\/\/\S+$/.test(e.statusListCredential))) p.push("credentialStatus.statusListCredential must be a URL");
+  else if (e.id !== e.statusListCredential + "#" + e.statusListIndex) p.push("credentialStatus.id must be <statusListCredential>#<statusListIndex>");
+  return p;
+}
+function buildStatusListCredential({ url, issuer, bytes, now, ttlHours = 168 }) {
+  const validFrom = new Date(now).toISOString();
+  const doc = {
+    "@context": ["https://www.w3.org/ns/credentials/v2"],
+    id: url,
+    type: ["VerifiableCredential", "BitstringStatusListCredential"],
+    issuer: issuer.did,
+    validFrom,
+    validUntil: new Date(Date.parse(validFrom) + ttlHours * 36e5).toISOString(),
+    credentialSubject: { id: url + "#list", type: "BitstringStatusList", statusPurpose: "revocation", encodedList: encodeList(bytes) }
+  };
+  return { ...doc, proof: { type: "SanadDetachedJws", verificationMethod: issuer.kid, created: validFrom, jws: issuer.sign(STATUS_LIST_TYP, JSON.parse(JSON.stringify(doc))) } };
+}
+function checkStatus({ credential, lists, now, resolver }) {
+  const entry = credential?.credentialStatus;
+  if (entry === void 0) return { ok: true, revoked: false, detail: "the credential carries no credentialStatus", applicable: false };
+  const bad2 = statusEntryProblems(entry);
+  if (bad2.length) return { ok: false, revoked: false, detail: bad2.join("; "), applicable: true };
+  const list = (Array.isArray(lists) ? lists : []).find((l) => isObj6(l) && l.id === entry.statusListCredential);
+  if (!list) return { ok: false, revoked: false, detail: "the status list " + entry.statusListCredential + " was not supplied", applicable: true };
+  try {
+    const { proof, ...body } = list;
+    if (!isObj6(proof) || proof.type !== "SanadDetachedJws") return { ok: false, revoked: false, detail: "the status list has no Sanad proof", applicable: true };
+    if (list.issuer !== credential.issuer) return { ok: false, revoked: false, detail: "the status list is issued by " + list.issuer + ", not by the credential's issuer", applicable: true };
+    if (canonical(list.type) !== canonical(["VerifiableCredential", "BitstringStatusListCredential"]) || list.credentialSubject?.type !== "BitstringStatusList" || list.credentialSubject?.statusPurpose !== "revocation") return { ok: false, revoked: false, detail: "the document is not a revocation BitstringStatusListCredential", applicable: true };
+    const r = resolver.verifyStatement({ jws: proof.jws, payload: body, typ: STATUS_LIST_TYP, signer: list.issuer, date: String(list.validFrom).slice(0, 10) });
+    if (!r.ok || r.kid !== proof.verificationMethod || proof.created !== list.validFrom) return { ok: false, revoked: false, detail: "the status list signature is refused" + (r.ok ? "" : " (" + r.reason + ")"), applicable: true };
+    const t = new Date(now).getTime();
+    if (!(Date.parse(list.validFrom) <= t)) return { ok: false, revoked: false, detail: "the status list is dated after the evaluation time", applicable: true };
+    if (list.validUntil !== void 0 && !(t <= Date.parse(list.validUntil))) return { ok: false, revoked: false, detail: "the status list expired at " + list.validUntil + " (a stale list can hide a revocation)", applicable: true };
+    const bits = decodeList(list.credentialSubject.encodedList);
+    const idx = Number(entry.statusListIndex);
+    if (idx >= bits.length * 8) return { ok: false, revoked: false, detail: "statusListIndex is outside the list", applicable: true };
+    const revoked = getBit(bits, idx);
+    return { ok: !revoked, revoked, detail: revoked ? `revoked: bit ${idx} of ${entry.statusListCredential} is set` : `bit ${idx} of ${entry.statusListCredential} is clear (list valid ${list.validFrom} to ${list.validUntil ?? "no end"})`, applicable: true };
+  } catch (e) {
+    return { ok: false, revoked: false, detail: "the status list is not usable: " + (e?.message ?? e), applicable: true };
+  }
+}
+
+// engine/src/bundle.mjs
 var DID_KEY2 = "did:key:";
 var KINDS4 = ["auto", "sitting", "artifact", "peer"];
 var ISO_DT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 var byId2 = (a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 var clone2 = (v) => JSON.parse(JSON.stringify(v));
-var isObj4 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+var isObj7 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 var isStr3 = (v) => typeof v === "string";
-var exactly2 = (o, names) => {
-  if (!isObj4(o)) return false;
+var exactly4 = (o, names) => {
+  if (!isObj7(o)) return false;
   const k = Object.keys(o).sort();
   const n = [...names].sort();
   return k.length === n.length && k.every((x, i) => x === n[i]);
@@ -1855,7 +2237,7 @@ function bundleHashOf(bundle) {
     attestations: [...bundle.attestations].sort(byId2)
   });
 }
-function buildCredential({ bundle, issuer, template, assessment, process: process2, policy, log, dids = [], now, id }) {
+function buildCredential({ bundle, issuer, template, assessment, process: process2, policy, log, dids = [], now, id, credentialStatus }) {
   const validFrom = new Date(now).toISOString();
   const bundleHash = bundleHashOf(bundle);
   const doc = {
@@ -1866,6 +2248,7 @@ function buildCredential({ bundle, issuer, template, assessment, process: proces
     validFrom,
     credentialSubject: { id: bundle.subject, skill: bundle.skill, claimedLevel: bundle.claimedLevel },
     evidence: [{ type: ["Evidence", "SanadBundle"], id: "urn:sanad:bundle:" + bundleHash, bundleHash, alg: SANAD_VERSION }],
+    ...credentialStatus ? { credentialStatus: clone2(credentialStatus) } : {},
     sanad: { bundle: clone2(bundle), template: { id: template.id, hash: template.hash }, assessment, process: clone2(process2), policy: clone2(policy), log: clone2(log), dids: clone2(dids) }
   };
   const jws = issuer.sign(CREDENTIAL_TYP, clone2(doc));
@@ -1874,78 +2257,80 @@ function buildCredential({ bundle, issuer, template, assessment, process: proces
 var VERIFY_LIMITS = { attestations: 200, evidence: 200, logEntries: 2e3, dids: 100, versionsPerHistory: DID_LIMITS.versions, keysPerVersion: DID_LIMITS.keys, revokedPerVersion: DID_LIMITS.revoked };
 var NOTICE = "Experimental software: the Sanad engine has not been cryptographically reviewed. A passing report records what was signed and logged, not that the attestors were honest. Backdating with a stolen attestor key, collusion and help off camera are not detected.";
 var PROCESS_BASE = ["invited", "committed", "revealed", "missing", "late", "notCommitted"];
-var processOk = (pr) => isObj4(pr) && PROCESS_BASE.every((k) => k in pr) && Object.keys(pr).every((k) => PROCESS_BASE.includes(k) || k === "removed" || k === "shortfall") && ["removed", "shortfall"].every((k) => !(k in pr) || Array.isArray(pr[k]) && pr[k].every(isStr3));
+var processOk = (pr) => isObj7(pr) && PROCESS_BASE.every((k) => k in pr) && Object.keys(pr).every((k) => PROCESS_BASE.includes(k) || k === "removed" || k === "shortfall" || k === "evidenceAdded") && ["removed", "shortfall", "evidenceAdded"].every((k) => !(k in pr) || Array.isArray(pr[k]) && pr[k].every(isStr3));
 var POLICY_KEYS = ["minAttestors", "requireLive", "halfLifeMonths", "minAttestorSittings", "minAgreement", "maxInferenceDepth", "inferenceDecay"];
 function shapeProblems(doc) {
   const p = [];
   const need = (cond, msg) => {
     if (!cond) p.push(msg);
   };
-  if (!exactly2(doc, ["@context", "type", "id", "issuer", "validFrom", "credentialSubject", "evidence", "sanad", "proof"])) {
-    p.push("top level members must be exactly @context, type, id, issuer, validFrom, credentialSubject, evidence, sanad, proof");
+  const TOP = ["@context", "type", "id", "issuer", "validFrom", "credentialSubject", "evidence", "sanad", "proof"];
+  if (!exactly4(doc, TOP) && !exactly4(doc, [...TOP, "credentialStatus"])) {
+    p.push("top level members must be exactly @context, type, id, issuer, validFrom, credentialSubject, evidence, sanad, proof, and optionally credentialStatus");
     return p;
   }
+  if ("credentialStatus" in doc) p.push(...statusEntryProblems(doc.credentialStatus));
   need(canonical(doc["@context"]) === canonical(["https://www.w3.org/ns/credentials/v2"]), "@context is not the VC 2.0 context");
   need(canonical(doc.type) === canonical(["VerifiableCredential", "SanadCredential"]), "type is not VerifiableCredential, SanadCredential");
   need(isStr3(doc.id) && /^urn:uuid:[0-9a-f-]{36}$/.test(doc.id), "id is not a urn:uuid");
   need(isStr3(doc.issuer) && doc.issuer.startsWith("did:"), "issuer is not a DID");
   need(isStr3(doc.validFrom) && ISO_DT.test(doc.validFrom) && !Number.isNaN(Date.parse(doc.validFrom)), "validFrom is not an ISO date-time in UTC");
-  need(exactly2(doc.credentialSubject, ["id", "skill", "claimedLevel"]), "credentialSubject members");
-  need(Array.isArray(doc.evidence) && doc.evidence.length === 1 && exactly2(doc.evidence[0], ["type", "id", "bundleHash", "alg"]), "evidence must be one bundle reference with type, id, bundleHash, alg");
-  need(exactly2(doc.proof, ["type", "verificationMethod", "created", "jws"]), "proof members");
+  need(exactly4(doc.credentialSubject, ["id", "skill", "claimedLevel"]), "credentialSubject members");
+  need(Array.isArray(doc.evidence) && doc.evidence.length === 1 && exactly4(doc.evidence[0], ["type", "id", "bundleHash", "alg"]), "evidence must be one bundle reference with type, id, bundleHash, alg");
+  need(exactly4(doc.proof, ["type", "verificationMethod", "created", "jws"]), "proof members");
   const s = doc.sanad;
-  if (!exactly2(s, ["bundle", "template", "assessment", "process", "policy", "log", "dids"])) {
+  if (!exactly4(s, ["bundle", "template", "assessment", "process", "policy", "log", "dids"])) {
     p.push("sanad members must be exactly bundle, template, assessment, process, policy, log, dids");
     return p;
   }
-  need(exactly2(s.template, ["id", "hash"]), "sanad.template members");
+  need(exactly4(s.template, ["id", "hash"]), "sanad.template members");
   need(isStr3(s.assessment), "sanad.assessment must be a string");
   need(processOk(s.process), "sanad.process members");
-  need(exactly2(s.policy, ["id", ...POLICY_KEYS]), "sanad.policy members");
-  need(Array.isArray(s.dids) && s.dids.every((d) => exactly2(d, ["id", "versions"]) && isStr3(d.id) && Array.isArray(d.versions)), "sanad.dids must be a list of { id, versions }");
+  need(exactly4(s.policy, ["id", ...POLICY_KEYS]), "sanad.policy members");
+  need(Array.isArray(s.dids) && s.dids.every((d) => exactly4(d, ["id", "versions"]) && isStr3(d.id) && Array.isArray(d.versions)), "sanad.dids must be a list of { id, versions }");
   if (Array.isArray(s.dids)) {
     if (s.dids.length > VERIFY_LIMITS.dids) p.push("too many DID histories (limit " + VERIFY_LIMITS.dids + ")");
     for (const d of s.dids) {
-      if (!isObj4(d) || !Array.isArray(d.versions)) continue;
+      if (!isObj7(d) || !Array.isArray(d.versions)) continue;
       if (d.versions.length > VERIFY_LIMITS.versionsPerHistory) {
         p.push(`DID history ${String(d.id).slice(0, 60)} has more than ${VERIFY_LIMITS.versionsPerHistory} versions`);
         continue;
       }
-      for (const v of d.versions) if (isObj4(v) && (Array.isArray(v.keys) && v.keys.length > VERIFY_LIMITS.keysPerVersion || Array.isArray(v.revoked) && v.revoked.length > VERIFY_LIMITS.revokedPerVersion)) {
+      for (const v of d.versions) if (isObj7(v) && (Array.isArray(v.keys) && v.keys.length > VERIFY_LIMITS.keysPerVersion || Array.isArray(v.revoked) && v.revoked.length > VERIFY_LIMITS.revokedPerVersion)) {
         p.push(`a DID version has more than ${VERIFY_LIMITS.keysPerVersion} keys or ${VERIFY_LIMITS.revokedPerVersion} revocations`);
         break;
       }
     }
   }
-  if (isObj4(s.log) && Array.isArray(s.log.entries) && s.log.entries.length > VERIFY_LIMITS.logEntries) {
+  if (isObj7(s.log) && Array.isArray(s.log.entries) && s.log.entries.length > VERIFY_LIMITS.logEntries) {
     p.push("too many log entries (limit " + VERIFY_LIMITS.logEntries + ")");
     return p;
   }
   const l = s.log;
-  need(exactly2(l, ["logId", "logKey", "entries", "proofs", "checkpoint"]) && Array.isArray(l.entries) && Array.isArray(l.proofs) && l.entries.every((e) => exactly2(e, ["index", "leaf"])) && l.proofs.every((e) => exactly2(e, ["index", "size", "proof"])) && exactly2(l.checkpoint, ["payload", "jws"]), "sanad.log members");
+  need(exactly4(l, ["logId", "logKey", "entries", "proofs", "checkpoint"]) && Array.isArray(l.entries) && Array.isArray(l.proofs) && l.entries.every((e) => exactly4(e, ["index", "leaf"])) && l.proofs.every((e) => exactly4(e, ["index", "size", "proof"])) && exactly4(l.checkpoint, ["payload", "jws"]), "sanad.log members");
   const b = s.bundle;
-  if (isObj4(b) && (Array.isArray(b.attestations) && b.attestations.length > VERIFY_LIMITS.attestations || Array.isArray(b.evidence) && b.evidence.length > VERIFY_LIMITS.evidence)) {
+  if (isObj7(b) && (Array.isArray(b.attestations) && b.attestations.length > VERIFY_LIMITS.attestations || Array.isArray(b.evidence) && b.evidence.length > VERIFY_LIMITS.evidence)) {
     p.push("too many evidence items or attestations (limits " + VERIFY_LIMITS.evidence + " and " + VERIFY_LIMITS.attestations + ")");
     return p;
   }
-  if (!exactly2(b, ["skill", "claimedLevel", "subject", "evidence", "attestations", "attestors"])) {
+  if (!exactly4(b, ["skill", "claimedLevel", "subject", "evidence", "attestations", "attestors"])) {
     p.push("bundle members must be exactly skill, claimedLevel, subject, evidence, attestations, attestors");
     return p;
   }
   need(isStr3(b.skill) && isStr3(b.subject) && Number.isInteger(b.claimedLevel) && b.claimedLevel >= 0 && b.claimedLevel <= 5, "bundle skill, subject and claimedLevel (an integer from 0 to 5)");
-  if (!Array.isArray(b.evidence) || !Array.isArray(b.attestations) || !isObj4(b.attestors)) {
+  if (!Array.isArray(b.evidence) || !Array.isArray(b.attestations) || !isObj7(b.attestors)) {
     p.push("bundle evidence and attestations must be lists, attestors an object");
     return p;
   }
   b.evidence.forEach((e, i) => {
-    if (!exactly2(e, ["id", "kind", "date", "summary", "body", "hash"])) p.push(`evidence[${i}] members must be exactly id, kind, date, summary, body, hash`);
-    else if (!isStr3(e.id) || !KINDS4.includes(e.kind) || !isStr3(e.date) || !isStr3(e.summary) || !isObj4(e.body) || !isStr3(e.hash)) p.push(`evidence[${i}] member types`);
+    if (!exactly4(e, ["id", "kind", "date", "summary", "body", "hash"])) p.push(`evidence[${i}] members must be exactly id, kind, date, summary, body, hash`);
+    else if (!isStr3(e.id) || !KINDS4.includes(e.kind) || !isStr3(e.date) || !isStr3(e.summary) || !isObj7(e.body) || !isStr3(e.hash)) p.push(`evidence[${i}] member types`);
   });
   b.attestations.forEach((a, i) => {
-    if (!exactly2(a, ["id", "attestor", "evidence", "level", "role", "conflictDeclared", "date", "signature", "commit", "nonce", "prev", "hash"])) p.push(`attestations[${i}] members must be exactly the twelve of the reference shape`);
+    if (!exactly4(a, ["id", "attestor", "evidence", "level", "role", "conflictDeclared", "date", "signature", "commit", "nonce", "prev", "hash"])) p.push(`attestations[${i}] members must be exactly the twelve of the reference shape`);
     else if (!["id", "attestor", "evidence", "role", "date", "signature", "commit", "nonce", "prev", "hash"].every((k) => isStr3(a[k])) || !Number.isInteger(a.level) || typeof a.conflictDeclared !== "boolean") p.push(`attestations[${i}] member types`);
   });
-  for (const [did, st] of Object.entries(b.attestors)) if (!exactly2(st, ["sittings", "agreement"]) || typeof st.sittings !== "number" || typeof st.agreement !== "number") p.push(`attestors.${did} must be { sittings, agreement }`);
+  for (const [did, st] of Object.entries(b.attestors)) if (!exactly4(st, ["sittings", "agreement"]) || typeof st.sittings !== "number" || typeof st.agreement !== "number") p.push(`attestors.${did} must be { sittings, agreement }`);
   if (new Set(b.evidence.map((e) => e.id)).size !== b.evidence.length) p.push("duplicate evidence id");
   if (new Set(b.attestations.map((a) => a.id)).size !== b.attestations.length) p.push("duplicate attestation id");
   return p;
@@ -1953,7 +2338,7 @@ function shapeProblems(doc) {
 function verifierResolver(given, embeddedDids, trusted) {
   const mapOf = (list) => {
     const m = /* @__PURE__ */ new Map();
-    for (const d of Array.isArray(list) ? list : []) if (isObj4(d) && isStr3(d.id)) m.set(d.id, d);
+    for (const d of Array.isArray(list) ? list : []) if (isObj7(d) && isStr3(d.id)) m.set(d.id, d);
     return m;
   };
   const embMap = mapOf(embeddedDids), trMap = mapOf(trusted);
@@ -2011,7 +2396,7 @@ function verifyCredential(doc, opts = {}) {
     return { ok, checks, recognition: recognition && !ok && unverifiedLabel ? { ...recognition, unverified: true } : recognition, inferred, warnings, basis, notice: NOTICE };
   };
   try {
-    if (!isObj4(doc)) {
+    if (!isObj7(doc)) {
       ADD(checks, "shape", false, "the credential must be a JSON object");
       return done();
     }
@@ -2020,17 +2405,17 @@ function verifyCredential(doc, opts = {}) {
     if (problems.length) return done();
     const { sanad } = doc, bundle = sanad.bundle;
     const resolver = verifierResolver(opts.resolver, sanad.dids, opts.trustedDidHistories);
-    const day = new Date(doc.validFrom).toISOString().slice(0, 10);
+    const day3 = new Date(doc.validFrom).toISOString().slice(0, 10);
     {
       const { proof } = doc, { proof: _omit, ...body } = doc;
-      const r = proof.type === "SanadDetachedJws" ? resolver.verifyStatement({ jws: proof.jws, payload: body, typ: CREDENTIAL_TYP, signer: doc.issuer, date: day }) : { ok: false, reason: "unknown_proof_type" };
+      const r = proof.type === "SanadDetachedJws" ? resolver.verifyStatement({ jws: proof.jws, payload: body, typ: CREDENTIAL_TYP, signer: doc.issuer, date: day3 }) : { ok: false, reason: "unknown_proof_type" };
       const kidOk = r.ok && r.kid === proof.verificationMethod;
       const proofOk = r.ok && kidOk && proof.created === doc.validFrom;
       ADD(
         checks,
         "issuer-proof",
         proofOk,
-        r.ok ? kidOk ? proof.created === doc.validFrom ? `signed by ${r.kid}, valid on ${day}` : "proof.created differs from validFrom" : "verificationMethod differs from the signing key" : "issuer signature refused: " + r.reason
+        r.ok ? kidOk ? proof.created === doc.validFrom ? `signed by ${r.kid}, valid on ${day3}` : "proof.created differs from validFrom" : "verificationMethod differs from the signing key" : "issuer signature refused: " + r.reason
       );
       if (!proofOk && opts.diagnose !== true) {
         warnings.push("verification stopped at the failed issuer proof; pass diagnose to examine the rest");
@@ -2049,6 +2434,38 @@ function verifyCredential(doc, opts = {}) {
     {
       const bad2 = bundle.evidence.filter((e) => e.body.kind !== e.kind || e.body.date !== e.date).map((e) => e.id);
       ADD(checks, "evidence-consistency", bad2.length === 0, bad2.length ? "kind or date differs from the hashed body in: " + bad2.join(", ") : "kind and date equal the hashed body in every evidence item");
+    }
+    {
+      const sittings = bundle.evidence.filter((e) => e.kind === "sitting");
+      if (sittings.length) {
+        const why = [], soft = [];
+        const hasShortfall = Array.isArray(sanad.process.shortfall) && sanad.process.shortfall.length > 0;
+        for (const e of sittings) {
+          const sp = sittingProblems(e.body);
+          if (sp.length) {
+            why.push(`${e.id}: ${sp.join(", ")}`);
+            continue;
+          }
+          if ("identityAssurance" in e.body) {
+            const ck = checkIdentitySignature(e.body, resolver);
+            if (!ck.ok) why.push(`${e.id}: identity statement refused (${ck.reason})`);
+          }
+          if (opts.minIdentityLevel !== void 0) {
+            const need = identityRank(opts.minIdentityLevel);
+            if (need < 0) why.push("minIdentityLevel must be A0, A1 or A2");
+            else if (identityRank(e.body.identityAssurance?.level) < need) why.push(`${e.id}: identity assurance ${e.body.identityAssurance?.level ?? "absent"} is below the required ${opts.minIdentityLevel}`);
+          }
+          if (opts.template !== void 0) {
+            const item = opts.template?.evidence?.find((x) => sanad.assessment + "." + x.key === e.id);
+            const miss = missingRequired(e.body, item);
+            if (miss.length && !hasShortfall) why.push(`${e.id}: the template requires ${miss.join(", ")} and it is missing`);
+          }
+          const absent = ["paperFingerprint", "strokeLogHead", "recordingSha256"].filter((k) => !(k in e.body));
+          if (absent.length) soft.push(`${e.id} carries no ${absent.join(", ")}`);
+        }
+        for (const m of soft) warnings.push("sitting evidence: " + m + " (the hash binds nothing about the sitting until it is present)");
+        ADD(checks, "sitting-evidence", why.length === 0, why.length ? why.join("; ") : `${sittings.length} sitting evidence item(s): members well formed, identity statements verify`);
+      }
     }
     {
       const pre = sanad.assessment + ".";
@@ -2106,6 +2523,22 @@ function verifyCredential(doc, opts = {}) {
       }
       ADD(checks, "log", why.length === 0, why.length ? why.join("; ") : `${l.entries.length} embedded entr${l.entries.length === 1 ? "y" : "ies"} verified against the checkpoint of size ${cp.payload.size}; every attestation hash and the bundle hash are leaves`);
     }
+    if (opts.requireWitnesses !== void 0) {
+      const n = opts.requireWitnesses;
+      if (!Number.isInteger(n) || n < 0) ADD(checks, "witnesses", false, "requireWitnesses must be a non-negative integer");
+      else if (n > 0) {
+        const ev = isObj7(opts.witnessEvidence) ? opts.witnessEvidence : {};
+        const w = verifyWitnesses({ checkpoint: sanad.log.checkpoint, logKey: sanad.log.logKey, resolver, cosigned: ev.cosigned, consistency: ev.consistency, trusted: opts.trustedWitnesses });
+        ADD(checks, "witnesses", w.count >= n, w.count >= n ? `${w.count} pinned witness(es) cosigned a checkpoint consistent with the credential's: ${w.witnesses.join(", ")}` : `${w.count} of the required ${n} pinned witnesses: ${w.problems.join("; ") || "none supplied"}`);
+      }
+    }
+    if (doc.credentialStatus !== void 0) {
+      if (Array.isArray(opts.statusLists)) {
+        const r = checkStatus({ credential: doc, lists: opts.statusLists, now: opts.now ?? Date.now(), resolver });
+        ADD(checks, "revocation", r.ok, r.detail);
+      } else if (opts.requireStatus === true) ADD(checks, "revocation", false, "the credential names a status list (" + doc.credentialStatus.statusListCredential + ") and none was supplied (requireStatus)");
+      else warnings.push("revocation not checked: the credential names the status list " + doc.credentialStatus.statusListCredential + "; supply it (statusLists) to learn whether it was revoked");
+    }
     const pin = (name, label, list, value) => {
       if (Array.isArray(list)) {
         const ok = list.includes(value);
@@ -2118,7 +2551,7 @@ function verifyCredential(doc, opts = {}) {
     pin("trusted-issuer", "issuer", opts.trustedIssuers, doc.issuer);
     pin("trusted-log-key", "log key", opts.trustedLogKeys, sanad.log.logKey);
     if (resolver.usedEmbedded.size) {
-      const pinned = isObj4(opts.pinnedKeys) ? opts.pinnedKeys : {};
+      const pinned = isObj7(opts.pinnedKeys) ? opts.pinnedKeys : {};
       const bad2 = [];
       for (const [did, keys] of resolver.usedEmbedded) for (const k of keys) if (!(Array.isArray(pinned[did]) && pinned[did].includes(k))) bad2.push(`${did} (key ${k.slice(0, 12)}...)`);
       if (bad2.length && opts.allowEmbeddedDids === true) {
@@ -2166,14 +2599,14 @@ function verifyCredential(doc, opts = {}) {
     if (Array.isArray(sanad.process.shortfall) && sanad.process.shortfall.length) warnings.push("the operator finalized below the template minimum: " + sanad.process.shortfall.join("; "));
     let pol = null, polSource = null, asOfSource = null;
     if (opts.policy !== void 0) {
-      pol = isObj4(opts.policy) ? { ...opts.policy } : opts.policy;
+      pol = isObj7(opts.policy) ? { ...opts.policy } : opts.policy;
       polSource = "verifier";
     } else if (opts.useRecommendedPolicy === true) {
       pol = { ...sanad.policy };
       delete pol.id;
       polSource = "issuer-recommendation";
     }
-    if (isObj4(pol)) {
+    if (isObj7(pol)) {
       if (pol.asOf !== void 0) asOfSource = "policy";
       else if (opts.asOf !== void 0) {
         pol.asOf = opts.asOf;
@@ -2182,7 +2615,7 @@ function verifyCredential(doc, opts = {}) {
         pol.asOf = isoDay(opts.now ?? Date.now());
         asOfSource = "verifier-clock";
       } else if (polSource === "issuer-recommendation") {
-        pol.asOf = day;
+        pol.asOf = day3;
         asOfSource = "credential-date";
       }
     }
@@ -2194,7 +2627,7 @@ function verifyCredential(doc, opts = {}) {
         basis = { policySource: polSource === "verifier" ? "verifier" : "issuer-recommendation", asOfSource };
         const own = opts.attestorStats;
         if (own !== void 0) {
-          const okShape = isObj4(own) && Object.values(own).every((st) => isObj4(st) && Number.isFinite(st.sittings) && Number.isFinite(st.agreement));
+          const okShape = isObj7(own) && Object.values(own).every((st) => isObj7(st) && Number.isFinite(st.sittings) && Number.isFinite(st.agreement));
           ADD(checks, "attestor-statistics", okShape, okShape ? "verifier-supplied statistics replace the issuer's" : "attestorStats must map DIDs to { sittings, agreement }");
         } else if (pol.minAttestorSittings > 0 || pol.minAgreement > 0) {
           const allow = opts.allowIssuerStatistics === true;
@@ -2202,7 +2635,7 @@ function verifyCredential(doc, opts = {}) {
           if (allow) warnings.push("issuer-supplied statistics used for a threshold; they are not recomputable from the hash-only log");
         }
         try {
-          const cred = isObj4(own) ? { ...bundle, attestors: own } : bundle;
+          const cred = isObj7(own) ? { ...bundle, attestors: own } : bundle;
           const ropts = { verifySignature: (a) => sigReason(a).ok };
           if (Array.isArray(opts.allowedAttestors)) ropts.allowAttestor = (d) => opts.allowedAttestors.includes(d);
           recognition = recognise(cred, pol, ropts);
@@ -2217,6 +2650,280 @@ function verifyCredential(doc, opts = {}) {
     ADD(checks, "internal", false, "verification failed unexpectedly: " + (e?.message ?? e));
   }
   return done();
+}
+
+// engine/src/export.mjs
+import { readFileSync as readFileSync3, writeFileSync as writeFileSync3, mkdirSync as mkdirSync3, existsSync as existsSync3, readdirSync as readdirSync3, statSync } from "node:fs";
+import { join as join3, dirname as dirname2, basename, resolve } from "node:path";
+import { createHash as createHash3 } from "node:crypto";
+var ISSUER_CARD_TYP = "sanad-issuer-card+jws";
+var BUNDLE_FILES = ["credential.json", "evidence.json", "attestations.json", "log.json", "checkpoint.json", "consistency.json", "dids.json", "README.md"];
+var OPTIONAL_FILES = ["witnesses.json", "status.json"];
+var HEX645 = /^[0-9a-f]{64}$/;
+var isObj8 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+var sha2 = (text) => createHash3("sha256").update(text).digest("hex");
+var jsonText2 = (v) => JSON.stringify(v, null, 2) + "\n";
+var same = (a, b) => canonical(a) === canonical(b);
+var err2 = (code, message, status = 400) => new EngineError(code, message, status);
+var day2 = (iso) => String(iso).slice(0, 10);
+function readmeText({ bundleHash, base }) {
+  const b = base ? base.replace(/\/+$/, "") : "<base>";
+  return `# Sanad bundle ${bundleHash}
+
+This directory is a self-contained, static copy of one Sanad credential. Nothing in it is a video, a name or a score:
+it holds hashes, signatures, the signed log checkpoint and the credential, and anyone may mirror it (a free public git repository is enough).
+
+## URL scheme
+
+    ${b}/issuer.json                              issuer card (issuer DID, log key, log id), signed by the issuer key
+    ${b}/bundles/<bundleHash>/                    this directory; urn:sanad:bundle:<bundleHash> resolves here
+    ${b}/bundles/<bundleHash>/credential.json     the credential (verifiable on its own)
+    ${b}/bundles/<bundleHash>/manifest.json       SHA-256 of every other file here (integrity of a mirror, not trust)
+    ${b}/checkpoints/latest.json                  newest signed checkpoint, with a consistency proof from the previous one
+    ${b}/checkpoints/<size>.json, index.json      every published checkpoint, in order
+    ${b}/status/revocation.json                   Bitstring Status List credential (fetch it fresh; it expires)
+
+Witnesses publish their cosignatures in their own static directories: <witnessBase>/<logId>/<size>.json.
+
+## Files here
+
+- credential.json: the credential; evidence.json, attestations.json, log.json, checkpoint.json, dids.json are the same data as parts of it, split for readers and indexers; verification checks that they agree.
+- consistency.json: proofs that the log of the credential's checkpoint is a prefix of later signed checkpoints (RFC 9162).
+- witnesses.json (if present): checkpoints cosigned by witnesses. status.json (if present): a snapshot of the status list at export time; fetch the list again to check revocation.
+
+## Verify with no server and no network
+
+    sanad-engine verify-bundle <this directory> --policy policy.json --issuer <issuer DID> --log-key <log key DID> [--witness <DID> --require-witnesses 1]
+
+or open sanad-verifier.html in a browser and drop this directory (or a zip of it) on it. The issuer and log key must come from a source you trust; the directory cannot vouch for itself.
+A policy is yours to choose: the issuer's recommendation is inside the credential, but it is only a recommendation.
+`;
+}
+function buildBundleFiles({ engine, credentialId, issuerSigner, base = null, checkpointsDir = null, witnessDirs = [], now = Date.now() }) {
+  const cred = engine.getCredential(credentialId);
+  const bundleHash = cred.evidence[0].bundleHash;
+  const dir = "bundles/" + bundleHash + "/";
+  const files = /* @__PURE__ */ new Map();
+  const log = cred.sanad.log;
+  const cpSize = log.checkpoint.payload.size;
+  const cosigned = [];
+  for (const wd of witnessDirs) for (const item of readWitnessDir(wd, log.logId)) cosigned.push(item);
+  const targets = /* @__PURE__ */ new Map();
+  for (const c of cosigned) targets.set(c.checkpoint.payload.size, c.checkpoint);
+  if (checkpointsDir && existsSync3(join3(checkpointsDir, "checkpoints", "latest.json"))) {
+    const l = JSON.parse(readFileSync3(join3(checkpointsDir, "checkpoints", "latest.json"), "utf8"));
+    if (l?.checkpoint?.payload?.logId === log.logId) targets.set(l.checkpoint.payload.size, l.checkpoint);
+  }
+  const consistency = [];
+  for (const [size, checkpoint] of [...targets].sort((a, b) => a[0] - b[0])) {
+    if (size <= cpSize || size > engine.log.size()) continue;
+    const c = engine.log.consistency(cpSize, size);
+    if (c.rootM !== log.checkpoint.payload.rootHash || c.rootN !== checkpoint.payload.rootHash) continue;
+    consistency.push({ from: { size: cpSize, rootHash: c.rootM }, to: { checkpoint }, proof: c.proof });
+  }
+  const useful = cosigned.filter((c) => c.checkpoint.payload.size >= cpSize);
+  files.set(dir + "credential.json", jsonText2(cred));
+  files.set(dir + "evidence.json", jsonText2(cred.sanad.bundle.evidence));
+  files.set(dir + "attestations.json", jsonText2(cred.sanad.bundle.attestations));
+  files.set(dir + "log.json", jsonText2({ logId: log.logId, logKey: log.logKey, entries: log.entries, proofs: log.proofs }));
+  files.set(dir + "checkpoint.json", jsonText2(log.checkpoint));
+  files.set(dir + "consistency.json", jsonText2(consistency));
+  files.set(dir + "dids.json", jsonText2(cred.sanad.dids));
+  if (useful.length) files.set(dir + "witnesses.json", jsonText2(useful));
+  let statusUrl = null;
+  try {
+    const list = engine.statusListCredential();
+    statusUrl = list.id;
+    files.set(dir + "status.json", jsonText2(list));
+  } catch (e) {
+    if (e.code !== "no_status_list") throw e;
+  }
+  files.set(dir + "README.md", readmeText({ bundleHash, base }));
+  const manifest = { type: "sanad-bundle-manifest", version: 1, bundleHash, files: {} };
+  for (const [k, v] of [...files].sort((a, b) => a[0] < b[0] ? -1 : 1)) manifest.files[k.slice(dir.length)] = sha2(v);
+  files.set(dir + "manifest.json", jsonText2(manifest));
+  const dids = [.../* @__PURE__ */ new Set([cred.issuer, log.logKey])].filter((d) => !d.startsWith("did:key:")).map((d) => engine.resolver.get(d)).filter(Boolean);
+  const card = { type: "sanad-issuer-card", version: 1, alg: "sanad-0.1", issuer: cred.issuer, logId: log.logId, logKey: log.logKey, base: base ?? null, bundles: "bundles/", checkpoints: "checkpoints/", status: statusUrl, dids, updated: new Date(now).toISOString() };
+  if (issuerSigner) {
+    if (issuerSigner.did !== cred.issuer) throw err2("wrong_issuer", "the issuer key is " + issuerSigner.did + " but the credential was issued by " + cred.issuer);
+    files.set("issuer.json", jsonText2({ ...card, proof: { type: "SanadDetachedJws", verificationMethod: issuerSigner.kid, jws: issuerSigner.sign(ISSUER_CARD_TYP, JSON.parse(JSON.stringify(card))) } }));
+  } else files.set("issuer.json", jsonText2(card));
+  files.set("README.md", readmeText({ bundleHash: "<bundleHash>", base }));
+  return { bundleHash, files };
+}
+function writeFiles(root, files) {
+  for (const [rel, text] of files) {
+    if (rel.split("/").some((s) => s === "" || s === "." || s === "..")) throw err2("bad_path", "unsafe path " + rel);
+    const f = join3(root, rel);
+    mkdirSync3(dirname2(f), { recursive: true });
+    writeFileSync3(f, text);
+  }
+}
+var TREE_LIMITS = { files: 5e3, bytes: 64 * 1024 * 1024 };
+function readTree(root) {
+  const out = /* @__PURE__ */ new Map();
+  let bytes = 0;
+  const walk = (rel) => {
+    for (const e of readdirSync3(join3(root, rel), { withFileTypes: true })) {
+      if (e.name.startsWith(".")) continue;
+      const r = rel ? rel + "/" + e.name : e.name;
+      if (e.isDirectory()) walk(r);
+      else if (e.isFile()) {
+        const st = statSync(join3(root, r));
+        bytes += st.size;
+        if (out.size >= TREE_LIMITS.files || bytes > TREE_LIMITS.bytes) throw err2("too_large", "the directory is larger than a bundle should be");
+        out.set(r, readFileSync3(join3(root, r), "utf8"));
+      }
+    }
+  };
+  walk("");
+  return out;
+}
+function readBundlePath(path) {
+  const p = resolve(path);
+  if (existsSync3(join3(p, "credential.json"))) {
+    const cred = JSON.parse(readFileSync3(join3(p, "credential.json"), "utf8"));
+    const h = cred?.evidence?.[0]?.bundleHash;
+    if (typeof h !== "string" || !HEX645.test(h)) throw err2("bad_bundle", "credential.json has no bundle hash");
+    const files = /* @__PURE__ */ new Map();
+    for (const [k, v] of readTree(p)) files.set("bundles/" + h + "/" + k, v);
+    const card = join3(dirname2(dirname2(p)), "issuer.json");
+    if (basename(dirname2(p)) === "bundles" && existsSync3(card)) files.set("issuer.json", readFileSync3(card, "utf8"));
+    return files;
+  }
+  if (existsSync3(join3(p, "bundles"))) return readTree(p);
+  throw err2("bad_bundle", path + " is neither a bundle directory (credential.json) nor a base directory (bundles/)");
+}
+var parse = (files, name) => {
+  const t = files.get(name);
+  if (t === void 0) return void 0;
+  return JSON.parse(t);
+};
+function verifyBundleFiles(files, opts = {}) {
+  const checks = [], warnings = [];
+  const ADD2 = (name, ok, detail) => checks.push({ name, ok, detail });
+  const finish = (report) => ({ ok: checks.every((c) => c.ok) && (report ? report.ok : true), checks: [...checks, ...report?.checks ?? []], warnings: [...warnings, ...report?.warnings ?? []], recognition: report?.recognition ?? null, inferred: report?.inferred ?? [], basis: report?.basis ?? null, notice: report?.notice });
+  try {
+    const dirs = [...new Set([...files.keys()].map((k) => /^bundles\/([0-9a-f]{64})\/credential\.json$/.exec(k)?.[1]).filter(Boolean))];
+    const hash = opts.bundle ?? (dirs.length === 1 ? dirs[0] : void 0);
+    if (!hash || !dirs.includes(hash)) {
+      ADD2("bundle-files", false, dirs.length ? "the tree holds several bundles; name one (bundle): " + dirs.join(", ") : "no bundles/<hash>/credential.json in the tree");
+      return finish(null);
+    }
+    const dir = "bundles/" + hash + "/";
+    const get = (n) => files.get(dir + n);
+    {
+      const why = [];
+      let m;
+      try {
+        m = JSON.parse(get("manifest.json") ?? "null");
+      } catch {
+        m = null;
+      }
+      if (!isObj8(m) || m.type !== "sanad-bundle-manifest" || !isObj8(m.files)) why.push("manifest.json is missing or malformed");
+      else {
+        if (m.bundleHash !== hash) why.push("manifest.json names another bundle hash");
+        for (const [n, h] of Object.entries(m.files)) {
+          const t = get(n);
+          if (t === void 0) why.push(n + " is listed but missing");
+          else if (sha2(t) !== h) why.push(n + " does not match its recorded SHA-256");
+        }
+        for (const n of [...BUNDLE_FILES, ...OPTIONAL_FILES]) if (get(n) !== void 0 && !(n in m.files)) why.push(n + " is present but not listed");
+        const extra = [...files.keys()].filter((k) => k.startsWith(dir) && k !== dir + "manifest.json" && !(k.slice(dir.length) in m.files));
+        if (extra.length) warnings.push("files not listed in the manifest: " + extra.map((k) => k.slice(dir.length)).join(", "));
+        for (const n of BUNDLE_FILES) if (!(n in m.files)) why.push(n + " is required and not listed");
+      }
+      ADD2("bundle-files", why.length === 0, why.length ? why.join("; ") : "every file matches the manifest");
+      if (why.length) return finish(null);
+    }
+    const cred = JSON.parse(get("credential.json"));
+    const sanad = cred?.sanad;
+    if (!isObj8(sanad)) {
+      ADD2("bundle-consistency", false, "credential.json has no sanad member");
+      return finish(null);
+    }
+    {
+      const why = [];
+      if (cred.evidence?.[0]?.bundleHash !== hash) why.push("the directory name is not the credential's bundle hash");
+      const eq = (name, v) => {
+        let x;
+        try {
+          x = JSON.parse(get(name));
+        } catch {
+          x = /* @__PURE__ */ Symbol("bad");
+        }
+        if (!same(x, v)) why.push(name + " differs from the credential");
+      };
+      eq("evidence.json", sanad.bundle?.evidence);
+      eq("attestations.json", sanad.bundle?.attestations);
+      eq("log.json", { logId: sanad.log?.logId, logKey: sanad.log?.logKey, entries: sanad.log?.entries, proofs: sanad.log?.proofs });
+      eq("checkpoint.json", sanad.log?.checkpoint);
+      eq("dids.json", sanad.dids);
+      ADD2("bundle-consistency", why.length === 0, why.length ? why.join("; ") : "evidence, attestations, log, checkpoint and DID files agree with the credential");
+    }
+    const cardText = files.get("issuer.json");
+    if (cardText === void 0) warnings.push("no issuer.json next to the bundles: the issuer card was not checked");
+    else {
+      const why = [];
+      try {
+        const card = JSON.parse(cardText);
+        if (!isObj8(card) || card.type !== "sanad-issuer-card") why.push("not an issuer card");
+        else {
+          if (card.issuer !== cred.issuer) why.push("card issuer differs from the credential issuer");
+          if (card.logKey !== sanad.log.logKey || card.logId !== sanad.log.logId) why.push("card log differs from the credential log");
+          const { proof, ...body } = card;
+          if (!isObj8(proof) || proof.type !== "SanadDetachedJws") why.push("the card is not signed");
+          else {
+            const dids = [...Array.isArray(card.dids) ? card.dids : [], ...sanad.dids ?? []];
+            const r = embeddedResolver(dids, opts).verifyStatement({ jws: proof.jws, payload: body, typ: ISSUER_CARD_TYP, signer: card.issuer, date: day2(card.updated) });
+            if (!r.ok || r.kid !== proof.verificationMethod) why.push("the card signature is refused" + (r.ok ? "" : " (" + r.reason + ")"));
+          }
+        }
+      } catch {
+        why.push("issuer.json is not valid JSON");
+      }
+      ADD2("issuer-card", why.length === 0, why.length ? why.join("; ") : "the card is signed by the credential's issuer and names its log");
+    }
+    const consistency = [];
+    {
+      const why = [];
+      const list = parse(files.has(dir + "consistency.json") ? files : /* @__PURE__ */ new Map([[dir + "consistency.json", "[]"]]), dir + "consistency.json");
+      const cp = sanad.log.checkpoint.payload;
+      const res = embeddedResolver(sanad.dids ?? [], opts);
+      for (const [i, c] of (Array.isArray(list) ? list : []).entries()) {
+        const to = c?.to?.checkpoint;
+        const ok = isObj8(to) && c.from?.size === cp.size && c.from?.rootHash === cp.rootHash && verifyCheckpoint(to, (jws, payload, typ) => res.verifyStatement({ jws, payload, typ, signer: sanad.log.logKey, date: day2(payload.timestamp) }).ok) && to.payload.logId === cp.logId && verifyConsistency({ m: cp.size, n: to.payload.size, proof: c.proof, rootM: cp.rootHash, rootN: to.payload.rootHash });
+        if (!ok) why.push(`entry ${i} is not a valid consistency proof from the credential's checkpoint (size ${cp.size})`);
+        else consistency.push({ m: cp.size, n: to.payload.size, rootM: cp.rootHash, rootN: to.payload.rootHash, proof: c.proof });
+      }
+      ADD2("consistency-proofs", why.length === 0, why.length ? why.join("; ") : `${consistency.length} later checkpoint(s) proven to extend the credential's log`);
+    }
+    const o = { ...opts };
+    delete o.bundle;
+    const wit = files.has(dir + "witnesses.json") ? JSON.parse(files.get(dir + "witnesses.json")) : [];
+    if (o.witnessEvidence === void 0) o.witnessEvidence = { cosigned: Array.isArray(wit) ? wit : [], consistency };
+    if (o.statusLists === void 0 && files.has(dir + "status.json")) {
+      o.statusLists = [JSON.parse(files.get(dir + "status.json"))];
+      warnings.push("revocation was checked against the snapshot in status.json taken at export time; fetch the list again for a current answer");
+    }
+    return finish(verifyCredential(cred, o));
+  } catch (e) {
+    ADD2("internal", false, "the directory could not be verified: " + (e?.message ?? e));
+    return finish(null);
+  }
+}
+function embeddedResolver(dids, opts) {
+  const m = /* @__PURE__ */ new Map();
+  for (const d of dids) if (isObj8(d) && typeof d.id === "string") m.set(d.id, d);
+  const emb = createResolver({ store: { get: (c, id) => m.get(id) ?? null, put() {
+  } } });
+  return { verifyStatement: (a) => {
+    try {
+      return (opts.resolver && !String(a.signer).startsWith("did:key:") && opts.resolver.get?.(a.signer) ? opts.resolver : emb).verifyStatement(a);
+    } catch {
+      return { ok: false, reason: "bad_did_history" };
+    }
+  } };
 }
 
 // engine/src/attestor.mjs
@@ -2259,7 +2966,7 @@ function prepareReveal({ signer, assessment, ticket, attestationId, secret, date
 }
 
 // engine/src/engine.mjs
-import { randomBytes as randomBytes2, createHash as createHash3 } from "node:crypto";
+import { randomBytes as randomBytes2, createHash as createHash4 } from "node:crypto";
 
 // engine/src/ijson.mjs
 var MAX_DEPTH = 64;
@@ -2331,25 +3038,26 @@ function checkIJson(v, { maxDepth = MAX_DEPTH } = {}) {
 }
 
 // engine/src/engine.mjs
-var ID_RE2 = /^[A-Za-z0-9._:-]{1,200}$/;
+var ID_RE3 = /^[A-Za-z0-9._:-]{1,200}$/;
 var SUBJECT_UUID = /^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 var SUBJECT_HASH = /^urn:sanad:subject:[0-9a-f]{32,64}$/;
 var subjectOk = (s) => typeof s === "string" && (SUBJECT_UUID.test(s) || SUBJECT_HASH.test(s));
 var has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 var uuidFrom = (text) => {
-  const h = createHash3("sha256").update(text).digest("hex");
+  const h = createHash4("sha256").update(text).digest("hex");
   return `urn:uuid:${h.slice(0, 8)}-${h.slice(8, 12)}-5${h.slice(13, 16)}-8${h.slice(17, 20)}-${h.slice(20, 32)}`;
 };
 var DID_KEY3 = "did:key:";
 var COMMIT_TYP = "sanad-commit+jws";
 var HOUR = 36e5;
-var err = (code, message, status = 400) => new EngineError(code, message, status);
+var err3 = (code, message, status = 400) => new EngineError(code, message, status);
 var clone3 = (v) => JSON.parse(JSON.stringify(v));
 var isDateTime = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(s) && !Number.isNaN(Date.parse(s));
-function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver, clock = { now: () => Date.now() } } = {}) {
-  if (!store) throw err("bad_config", "a store is required");
-  if (!issuer || !issuer.did || !issuer.kid || typeof issuer.sign !== "function") throw err("bad_config", "issuer must be { did, kid, sign }");
-  if (!logSigner || !logSigner.did || typeof logSigner.sign !== "function") throw err("bad_config", "logSigner must be { did, kid, sign }");
+function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver, clock = { now: () => Date.now() }, status } = {}) {
+  if (status !== void 0 && !(status && typeof status.url === "string" && /^https?:\/\/\S+$/.test(status.url))) throw err3("bad_config", "status must be { url } with the http(s) URL at which the status list credential will be published");
+  if (!store) throw err3("bad_config", "a store is required");
+  if (!issuer || !issuer.did || !issuer.kid || typeof issuer.sign !== "function") throw err3("bad_config", "issuer must be { did, kid, sign }");
+  if (!logSigner || !logSigner.did || typeof logSigner.sign !== "function") throw err3("bad_config", "logSigner must be { did, kid, sign }");
   const res = resolver ?? createResolver({ store });
   let hi = 0;
   const nowMs = () => {
@@ -2368,8 +3076,8 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
   const nowIso = () => new Date(nowMs()).toISOString();
   const today = () => nowIso().slice(0, 10);
   const getRec = (id) => {
-    const a = typeof id === "string" && ID_RE2.test(id) ? store.get("assessments", id) : null;
-    if (!a) throw err("assessment_unknown", "no such assessment: " + id, 404);
+    const a = typeof id === "string" && ID_RE3.test(id) ? store.get("assessments", id) : null;
+    if (!a) throw err3("assessment_unknown", "no such assessment: " + id, 404);
     if (Number.isFinite(a.hwm) && a.hwm > hi) hi = a.hwm;
     return a;
   };
@@ -2385,7 +3093,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
   };
   const revealOpen = (a) => !!a.revealOpenedAt || Object.keys(a.reveals).length > 0 || a.invitations.length > 0 && rosterComplete(a) && a.invitations.every((i) => a.commits[i.attestationId]) || nowMs() > Date.parse(a.commitBy);
   const sigFail = (r) => {
-    const e = err("bad_signature", "signature refused: " + r.reason, 401);
+    const e = err3("bad_signature", "signature refused: " + r.reason, 401);
     e.reason = r.reason;
     return e;
   };
@@ -2398,6 +3106,18 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     const { id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, late, state, credentialId } = a;
     return clone3({ id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, removed: a.removed ?? [], commits, reveals, late, state, credentialId: credentialId ?? null, revealOpen: open });
   }
+  const statusDoc = () => store.get("status", "revocation") ?? { next: 0, bits: status?.bits ?? MIN_LIST_BITS, revoked: [], history: [] };
+  const allocateStatus = (credId) => {
+    const have = store.get("statusIndex", credId);
+    if (have) return have.index;
+    const d = statusDoc();
+    if (d.next >= d.bits) throw err3("status_list_full", "the status list has no free position; configure a larger list", 409);
+    const index = d.next;
+    d.next += 1;
+    store.put("status", "revocation", d);
+    store.put("statusIndex", credId, { index });
+    return index;
+  };
   let statsMemo = null;
   const finalizedStats = (excludeId) => {
     if (excludeId === void 0 || excludeId === null) {
@@ -2422,15 +3142,15 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       const hash = templateHash(t);
       const old = store.get("templates", t.id);
       if (old) {
-        if (old.hash !== hash) throw err("template_exists", "template " + t.id + " exists with a different hash", 409);
+        if (old.hash !== hash) throw err3("template_exists", "template " + t.id + " exists with a different hash", 409);
         return { id: t.id, hash };
       }
       store.put("templates", t.id, { template: clone3(t), hash });
       return { id: t.id, hash };
     },
     getTemplate(id) {
-      const r = typeof id === "string" && ID_RE2.test(id) ? store.get("templates", id) : null;
-      if (!r) throw err("template_unknown", "no such template: " + id, 404);
+      const r = typeof id === "string" && ID_RE3.test(id) ? store.get("templates", id) : null;
+      if (!r) throw err3("template_unknown", "no such template: " + id, 404);
       return clone3(r.template);
     },
     listTemplates() {
@@ -2443,38 +3163,46 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       return res.update(did, version, jws);
     },
     createAssessment({ templateId, subject, subjectDid, claimedLevel, evidence, commitBy, revealBy, id } = {}) {
-      const rec = typeof templateId === "string" && ID_RE2.test(templateId) ? store.get("templates", templateId) : null;
-      if (!rec) throw err("template_unknown", "no such template: " + templateId, 404);
+      const rec = typeof templateId === "string" && ID_RE3.test(templateId) ? store.get("templates", templateId) : null;
+      if (!rec) throw err3("template_unknown", "no such template: " + templateId, 404);
       const t = rec.template;
-      if (!subjectOk(subject)) throw err("bad_subject", "subject must be urn:uuid:<RFC 4122 uuid, lower case> or urn:sanad:subject:<32 to 64 lower-case hex characters>; names and contact details do not belong in the engine. This is a guard rail: the host remains responsible for generating a value that is not derived from personal data");
-      if (subjectDid !== void 0 && !(typeof subjectDid === "string" && /^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subjectDid) && subjectDid.length <= 200)) throw err("bad_subject", "subjectDid must be a DID");
-      if (!Number.isInteger(claimedLevel) || claimedLevel < 0 || claimedLevel > 5) throw err("bad_assessment", "claimedLevel must be an integer from 0 to 5");
+      if (!subjectOk(subject)) throw err3("bad_subject", "subject must be urn:uuid:<RFC 4122 uuid, lower case> or urn:sanad:subject:<32 to 64 lower-case hex characters>; names and contact details do not belong in the engine. This is a guard rail: the host remains responsible for generating a value that is not derived from personal data");
+      if (subjectDid !== void 0 && !(typeof subjectDid === "string" && /^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(subjectDid) && subjectDid.length <= 200)) throw err3("bad_subject", "subjectDid must be a DID");
+      if (!Number.isInteger(claimedLevel) || claimedLevel < 0 || claimedLevel > 5) throw err3("bad_assessment", "claimedLevel must be an integer from 0 to 5");
       const aid = id ?? "as-" + randomBytes2(8).toString("hex");
-      if (typeof aid !== "string" || !ID_RE2.test(aid) || aid.length > 150) throw err("bad_assessment", "id must match " + ID_RE2 + " and be at most 150 characters");
-      if (store.get("assessments", aid)) throw err("assessment_exists", "assessment exists: " + aid, 409);
-      if (!Array.isArray(evidence)) throw err("bad_evidence", "evidence must be a list");
+      if (typeof aid !== "string" || !ID_RE3.test(aid) || aid.length > 150) throw err3("bad_assessment", "id must match " + ID_RE3 + " and be at most 150 characters");
+      if (store.get("assessments", aid)) throw err3("assessment_exists", "assessment exists: " + aid, 409);
+      if (!Array.isArray(evidence)) throw err3("bad_evidence", "evidence must be a list");
       checkIJson(evidence);
       const plan = new Map(t.evidence.map((e) => [e.key, e]));
       const keys = evidence.map((e) => e?.key);
-      if (keys.length !== plan.size || new Set(keys).size !== keys.length || !keys.every((k) => plan.has(k))) throw err("bad_evidence", "evidence keys must be exactly " + [...plan.keys()].join(", "));
+      if (keys.length !== plan.size || new Set(keys).size !== keys.length || !keys.every((k) => plan.has(k))) throw err3("bad_evidence", "evidence keys must be exactly " + [...plan.keys()].join(", "));
       const sealed = [];
       for (const e of evidence) {
-        if (e === null || typeof e !== "object" || Array.isArray(e)) throw err("bad_evidence", "an evidence item must be an object");
-        if (!isIsoDate(e.date)) throw err("bad_evidence", "evidence " + e.key + ": date must be YYYY-MM-DD");
-        if (typeof e.summary !== "string") throw err("bad_evidence", "evidence " + e.key + ": summary must be a string");
-        if (e.body === null || typeof e.body !== "object" || Array.isArray(e.body)) throw err("bad_evidence", "evidence " + e.key + ": body must be an object");
+        if (e === null || typeof e !== "object" || Array.isArray(e)) throw err3("bad_evidence", "an evidence item must be an object");
+        if (!isIsoDate(e.date)) throw err3("bad_evidence", "evidence " + e.key + ": date must be YYYY-MM-DD");
+        if (typeof e.summary !== "string") throw err3("bad_evidence", "evidence " + e.key + ": summary must be a string");
+        if (e.body === null || typeof e.body !== "object" || Array.isArray(e.body)) throw err3("bad_evidence", "evidence " + e.key + ": body must be an object");
         const kind = plan.get(e.key).kind;
-        if ("kind" in e.body && e.body.kind !== kind || "date" in e.body && e.body.date !== e.date) throw err("bad_evidence", "evidence " + e.key + ": body.kind and body.date must equal the item kind and date");
-        if (kind === "auto" && !(Number.isInteger(e.body.autoLevel) && e.body.autoLevel >= 0 && e.body.autoLevel <= 5)) throw err("bad_evidence", "evidence " + e.key + ": an automatic record needs body.autoLevel, an integer from 0 to 5 (the level a replay yields); without it the recognition function ignores the item");
+        if ("kind" in e.body && e.body.kind !== kind || "date" in e.body && e.body.date !== e.date) throw err3("bad_evidence", "evidence " + e.key + ": body.kind and body.date must equal the item kind and date");
+        if (kind === "auto" && !(Number.isInteger(e.body.autoLevel) && e.body.autoLevel >= 0 && e.body.autoLevel <= 5)) throw err3("bad_evidence", "evidence " + e.key + ": an automatic record needs body.autoLevel, an integer from 0 to 5 (the level a replay yields); without it the recognition function ignores the item");
         const body = { ...clone3(e.body), kind, date: e.date };
+        if (kind === "sitting") {
+          const sp = sittingProblems(body);
+          if (sp.length) throw err3("bad_evidence", "evidence " + e.key + ": " + sp.join("; "));
+          if ("identityAssurance" in body) {
+            const ck = checkIdentitySignature(body, res);
+            if (!ck.ok) throw err3("bad_evidence", "evidence " + e.key + ": the identityAssurance signature is refused (" + ck.reason + ")");
+          }
+        }
         sealed.push(sealEvidence({ id: `${aid}.${e.key}`, kind, date: e.date, summary: e.summary, body }));
       }
       const start = nowMs();
       const cb = commitBy === void 0 ? start + t.deadlines.commitHours * HOUR : isDateTime(commitBy) ? Date.parse(commitBy) : NaN;
-      if (Number.isNaN(cb)) throw err("bad_assessment", "commitBy must be an ISO date-time");
+      if (Number.isNaN(cb)) throw err3("bad_assessment", "commitBy must be an ISO date-time");
       const rb = revealBy === void 0 ? cb + t.deadlines.revealHours * HOUR : isDateTime(revealBy) ? Date.parse(revealBy) : NaN;
-      if (Number.isNaN(rb)) throw err("bad_assessment", "revealBy must be an ISO date-time");
-      if (!(rb > cb)) throw err("bad_assessment", "revealBy must be after commitBy");
+      if (Number.isNaN(rb)) throw err3("bad_assessment", "revealBy must be an ISO date-time");
+      if (!(rb > cb)) throw err3("bad_assessment", "revealBy must be after commitBy");
       const a = {
         id: aid,
         templateId,
@@ -2499,19 +3227,19 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     invite(assessmentId, { attestor, role, evidence } = {}) {
       const a = getRec(assessmentId);
       const t = engine.getTemplate(a.templateId);
-      if (a.state !== "open") throw err("state", "the assessment is finalized", 409);
-      if (a.invitationsClosed) throw err("state", "the operator closed the invitations", 409);
-      if (revealOpen(a)) throw err("state", "the reveal phase is open; no more invitations", 409);
+      if (a.state !== "open") throw err3("state", "the assessment is finalized", 409);
+      if (a.invitationsClosed) throw err3("state", "the operator closed the invitations", 409);
+      if (revealOpen(a)) throw err3("state", "the reveal phase is open; no more invitations", 409);
       const ev = a.evidence.find((e) => e.id === evidence || e.id === `${a.id}.${evidence}`);
-      if (!ev) throw err("bad_evidence", "unknown evidence item: " + evidence);
-      if (typeof attestor !== "string" || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(attestor) || attestor.length > 200) throw err("bad_attestor", "attestor must be a DID");
-      if (!t.attestors.roles.includes(role)) throw err("bad_role", "role must be one of " + t.attestors.roles.join(", "));
-      if (a.subjectDid && attestor === a.subjectDid) throw err("subject_as_attestor", "the subject cannot attest their own work");
-      const same = a.invitations.filter((i) => i.evidence === ev.id);
-      if (same.some((i) => i.attestor === attestor)) throw err("duplicate_attestor", "this attestor is already invited on " + ev.id, 409);
+      if (!ev) throw err3("bad_evidence", "unknown evidence item: " + evidence);
+      if (typeof attestor !== "string" || !/^did:[a-z0-9]+:[A-Za-z0-9._:%-]+$/.test(attestor) || attestor.length > 200) throw err3("bad_attestor", "attestor must be a DID");
+      if (!t.attestors.roles.includes(role)) throw err3("bad_role", "role must be one of " + t.attestors.roles.join(", "));
+      if (a.subjectDid && attestor === a.subjectDid) throw err3("subject_as_attestor", "the subject cannot attest their own work");
+      const same2 = a.invitations.filter((i) => i.evidence === ev.id);
+      if (same2.some((i) => i.attestor === attestor)) throw err3("duplicate_attestor", "this attestor is already invited on " + ev.id, 409);
       const seq = (a.seq ?? a.invitations.length) + 1;
-      if (same.length >= t.attestors.max || seq > 99) throw err("too_many_attestors", "at most " + t.attestors.max + " attestors per evidence item", 409);
-      if (res.keysAt(attestor, today()).length === 0) throw err("did_unresolvable", "no valid key for " + attestor + " today");
+      if (same2.length >= t.attestors.max || seq > 99) throw err3("too_many_attestors", "at most " + t.attestors.max + " attestors per evidence item", 409);
+      if (res.keysAt(attestor, today()).length === 0) throw err3("did_unresolvable", "no valid key for " + attestor + " today");
       const inv2 = { attestationId: `${a.id}.a${String(seq).padStart(2, "0")}`, attestor, role, evidence: ev.id, invitedAt: nowIso() };
       a.invitations.push(inv2);
       a.seq = seq;
@@ -2521,9 +3249,9 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     /** Operator action: declare the roster final. The reveal phase can then open as soon as everyone invited has committed; no more invitations are accepted. */
     closeInvitations(assessmentId) {
       const a = getRec(assessmentId);
-      if (a.state !== "open") throw err("state", "the assessment is finalized", 409);
-      if (a.invitations.length === 0) throw err("state", "nothing to close: no attestor is invited", 409);
-      if (revealOpen(a)) throw err("state", "the reveal phase is already open", 409);
+      if (a.state !== "open") throw err3("state", "the assessment is finalized", 409);
+      if (a.invitations.length === 0) throw err3("state", "nothing to close: no attestor is invited", 409);
+      if (revealOpen(a)) throw err3("state", "the reveal phase is already open", 409);
       a.invitationsClosed = true;
       if (a.invitations.every((i) => a.commits[i.attestationId])) a.revealOpenedAt = nowIso();
       store.append("events", { type: "invitations-closed", assessment: a.id, at: nowIso(), invited: a.invitations.length });
@@ -2533,24 +3261,67 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     /** Operator action: withdraw an invitation before that attestor's first commit. Never reuses the attestation id; recorded in the events stream and in the credential's process.removed. */
     removeInvitation(assessmentId, attestationId, { reason } = {}) {
       const a = getRec(assessmentId);
-      if (a.state !== "open") throw err("state", "the assessment is finalized", 409);
+      if (a.state !== "open") throw err3("state", "the assessment is finalized", 409);
       const i = a.invitations.findIndex((x) => x.attestationId === attestationId);
-      if (i < 0) throw err("not_invited", "no invitation " + attestationId, 404);
-      if (a.commits[attestationId]) throw err("already_committed", "a commit for " + attestationId + " exists; an invitation cannot be removed after the first commit", 409);
-      if (reason !== void 0 && (typeof reason !== "string" || reason.length > 200)) throw err("bad_reason", "reason must be a string of up to 200 characters");
+      if (i < 0) throw err3("not_invited", "no invitation " + attestationId, 404);
+      if (a.commits[attestationId]) throw err3("already_committed", "a commit for " + attestationId + " exists; an invitation cannot be removed after the first commit", 409);
+      if (reason !== void 0 && (typeof reason !== "string" || reason.length > 200)) throw err3("bad_reason", "reason must be a string of up to 200 characters");
       const [inv2] = a.invitations.splice(i, 1);
       (a.removed ??= []).push({ attestationId, attestor: inv2.attestor, role: inv2.role, evidence: inv2.evidence, removedAt: nowIso() });
       store.append("events", { type: "invitation-removed", assessment: a.id, attestationId, attestor: inv2.attestor, at: nowIso(), ...reason ? { reason } : {} });
       save(a);
       return { removed: attestationId, invited: a.invitations.length };
     },
+    /**
+     * Adds members to an evidence item of an open assessment: the recording hash, the stroke-log head or the paper fingerprint exist only after the sitting.
+     * Refused once any attestor has committed (`evidence_sealed`): from the first commit the evidence is fixed. Members already present are never
+     * overwritten (`evidence_conflict` if the value differs, a no-op if it is the same); the evidence hash is recomputed; the addition is recorded in the
+     * assessment's history and in the events stream, and the credential lists the item in `process.evidenceAdded`.
+     * @returns {{ evidence: string, hash: string, added: string[], changed: boolean }}
+     */
+    addEvidence(assessmentId, { key, body } = {}) {
+      const a = getRec(assessmentId);
+      if (a.state !== "open") throw err3("state", "the assessment is finalized", 409);
+      if (Object.keys(a.commits).length > 0 || a.revealOpenedAt || Object.keys(a.reveals).length > 0) throw err3("evidence_sealed", "an attestor has already committed: the evidence is fixed", 409);
+      const idx = a.evidence.findIndex((e) => e.id === key || e.id === `${a.id}.${key}`);
+      if (idx < 0) throw err3("bad_evidence", "unknown evidence item: " + key);
+      if (body === null || typeof body !== "object" || Array.isArray(body)) throw err3("bad_evidence", "body must be an object");
+      checkIJson(body);
+      const ev = a.evidence[idx];
+      if ("kind" in body && body.kind !== ev.kind || "date" in body && body.date !== ev.date) throw err3("bad_evidence", "body.kind and body.date must equal the item kind and date");
+      const added = [];
+      for (const [k, v] of Object.entries(body)) {
+        if (k === "kind" || k === "date") continue;
+        if (has(ev.body, k)) {
+          if (hashOf(ev.body[k]) !== hashOf(v)) throw err3("evidence_conflict", "member " + k + " is already set to a different value; a set member is never overwritten", 409);
+        } else added.push(k);
+      }
+      if (added.length === 0) return { evidence: ev.id, hash: ev.hash, added: [], changed: false };
+      const merged = { ...clone3(ev.body) };
+      for (const k of added) merged[k] = clone3(body[k]);
+      if (ev.kind === "sitting") {
+        const sp = sittingProblems(merged);
+        if (sp.length) throw err3("bad_evidence", sp.join("; "));
+        if ("identityAssurance" in merged) {
+          const ck = checkIdentitySignature(merged, res);
+          if (!ck.ok) throw err3("bad_evidence", "the identityAssurance signature is refused (" + ck.reason + ")");
+        }
+      }
+      const sealedItem = sealEvidence({ id: ev.id, kind: ev.kind, date: ev.date, summary: ev.summary, body: merged });
+      const before = ev.hash;
+      a.evidence[idx] = sealedItem;
+      (a.evidenceLog ??= []).push({ evidence: ev.id, at: nowIso(), added: added.sort(), hashBefore: before, hashAfter: sealedItem.hash });
+      store.append("events", { type: "evidence-added", assessment: a.id, evidence: ev.id, at: nowIso(), added, hashBefore: before, hashAfter: sealedItem.hash });
+      save(a);
+      return { evidence: ev.id, hash: sealedItem.hash, added, changed: true };
+    },
     commit(assessmentId, { attestationId, payload, jws } = {}) {
       const a = getRec(assessmentId);
-      if (a.state !== "open") throw err("state", "the assessment is finalized", 409);
+      if (a.state !== "open") throw err3("state", "the assessment is finalized", 409);
       const inv2 = a.invitations.find((i) => i.attestationId === attestationId);
-      if (!inv2) throw err("not_invited", "no invitation " + attestationId, 403);
-      if (a.commits[attestationId]) throw err("already_committed", "a commit for " + attestationId + " exists", 409);
-      if (a.revealOpenedAt || Object.keys(a.reveals).length > 0 || nowMs() > Date.parse(a.commitBy)) throw err("commit_closed", "the commit phase is over (deadline " + a.commitBy + " or reveals have begun)", 409);
+      if (!inv2) throw err3("not_invited", "no invitation " + attestationId, 403);
+      if (a.commits[attestationId]) throw err3("already_committed", "a commit for " + attestationId + " exists", 409);
+      if (a.revealOpenedAt || Object.keys(a.reveals).length > 0 || nowMs() > Date.parse(a.commitBy)) throw err3("commit_closed", "the commit phase is over (deadline " + a.commitBy + " or reveals have begun)", 409);
       checkCommit({ payload, invitation: inv2, assessment: a });
       const r = res.verifyStatement({ jws, payload, typ: COMMIT_TYP, signer: inv2.attestor, date: today() });
       if (!r.ok) throw sigFail(r);
@@ -2562,15 +3333,15 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     },
     reveal(assessmentId, { attestationId, statement, jws } = {}) {
       const a = getRec(assessmentId);
-      if (a.state !== "open") throw err("state", "the assessment is finalized", 409);
+      if (a.state !== "open") throw err3("state", "the assessment is finalized", 409);
       const inv2 = a.invitations.find((i) => i.attestationId === attestationId);
-      if (!inv2) throw err("not_invited", "no invitation " + attestationId, 403);
-      if (!revealOpen(a)) throw err("reveal_not_open", "the reveal phase is not open yet", 409);
+      if (!inv2) throw err3("not_invited", "no invitation " + attestationId, 403);
+      if (!revealOpen(a)) throw err3("reveal_not_open", "the reveal phase is not open yet", 409);
       const c = a.commits[attestationId];
-      if (!c) throw err("not_committed", "no commit for " + attestationId, 409);
-      if (a.reveals[attestationId]) throw err("already_revealed", attestationId + " is already revealed", 409);
+      if (!c) throw err3("not_committed", "no commit for " + attestationId, 409);
+      if (a.reveals[attestationId]) throw err3("already_revealed", attestationId + " is already revealed", 409);
       if (nowMs() > Date.parse(a.revealBy)) {
-        if (statement === null || typeof statement !== "object" || statement.id !== attestationId || statement.attestor !== inv2.attestor || !isIsoDate(statement.date)) throw err("bad_statement", "a late reveal is recorded only for a statement of the invited attestor");
+        if (statement === null || typeof statement !== "object" || statement.id !== attestationId || statement.attestor !== inv2.attestor || !isIsoDate(statement.date)) throw err3("bad_statement", "a late reveal is recorded only for a statement of the invited attestor");
         const lr = res.verifyStatement({ jws, payload: statement, typ: ATTESTATION_TYP, signer: inv2.attestor, date: statement.date });
         if (!lr.ok) throw sigFail(lr);
         if (!a.late.includes(attestationId)) {
@@ -2578,7 +3349,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
           a.late.sort();
           save(a);
         }
-        throw err("reveal_late", "the reveal phase ended at " + a.revealBy, 409);
+        throw err3("reveal_late", "the reveal phase ended at " + a.revealBy, 409);
       }
       const t = engine.getTemplate(a.templateId);
       checkReveal({
@@ -2591,8 +3362,8 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       });
       const nat = nativeOfNonce(statement.nonce);
       if (nat !== null && t.levelMap) {
-        if (!Object.hasOwn(t.levelMap, nat)) throw err("native_unknown", "the nonce names a native mark that the template levelMap does not list");
-        if (t.levelMap[nat] !== statement.level) throw err("native_mismatch", "the native mark in the nonce maps to a different level than the revealed level");
+        if (!Object.hasOwn(t.levelMap, nat)) throw err3("native_unknown", "the nonce names a native mark that the template levelMap does not list");
+        if (t.levelMap[nat] !== statement.level) throw err3("native_mismatch", "the native mark in the nonce maps to a different level than the revealed level");
       }
       const r = res.verifyStatement({ jws, payload: statement, typ: ATTESTATION_TYP, signer: inv2.attestor, date: statement.date });
       if (!r.ok) throw sigFail(r);
@@ -2608,11 +3379,11 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
      */
     finalize(assessmentId, { allowShortfall = false } = {}) {
       const a = getRec(assessmentId);
-      if (a.state !== "open") throw err("state", "the assessment is already finalized", 409);
+      if (a.state !== "open") throw err3("state", "the assessment is already finalized", 409);
       const t = engine.getTemplate(a.templateId);
       const committed = Object.keys(a.commits).sort();
       const allRevealed = committed.every((k) => a.reveals[k]);
-      if (!(a.invitations.length > 0 && allRevealed || nowMs() > Date.parse(a.revealBy))) throw err("not_ready", "commits are still waiting for their reveals and the reveal deadline has not passed", 409);
+      if (!(a.invitations.length > 0 && allRevealed || nowMs() > Date.parse(a.revealBy))) throw err3("not_ready", "commits are still waiting for their reveals and the reveal deadline has not passed", 409);
       const missing = committed.filter((k) => !a.reveals[k]);
       const notCommitted = a.invitations.map((i) => i.attestationId).filter((k) => !a.commits[k]).sort();
       const revealed = committed.filter((k) => a.reveals[k]);
@@ -2621,7 +3392,12 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       for (const k of revealed) if (!a.reveals[k].statement.conflictDeclared) byEv.get(a.reveals[k].statement.evidence)?.add(a.reveals[k].statement.attestor);
       for (const e of a.evidence) if (e.kind !== "auto" && byEv.get(e.id).size < t.attestors.min) shortfall.push(`${e.id}: ${byEv.get(e.id).size} revealed attestor(s) without a declared conflict, template minimum ${t.attestors.min}`);
       if (t.liveSitting && !a.evidence.some((e) => e.kind === "sitting" && byEv.get(e.id).size > 0)) shortfall.push("liveSitting: no sitting evidence has a revealed attestor");
-      if (shortfall.length && !allowShortfall) throw err("below_template_minimum", "the template requirements are not met (" + shortfall.join("; ") + "); pass allowShortfall to finalize anyway, which is recorded in the credential", 409);
+      for (const e of a.evidence) {
+        const item = t.evidence.find((x) => `${a.id}.${x.key}` === e.id);
+        const miss = missingRequired(e.body, item);
+        if (miss.length) shortfall.push(`${e.id}: the template requires ${miss.join(", ")} in the evidence body and it is missing`);
+      }
+      if (shortfall.length && !allowShortfall) throw err3("below_template_minimum", "the template requirements are not met (" + shortfall.join("; ") + "); pass allowShortfall to finalize anyway, which is recorded in the credential", 409);
       const attestors = [...new Set(revealed.map((k) => a.reveals[k].statement.attestor))];
       const hist = finalizedStats();
       const stats = {};
@@ -2648,7 +3424,8 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         proofs: idx.map((i) => ({ index: i, size: cp.payload.size, proof: log.inclusion(i, cp.payload.size).proof })),
         checkpoint: cp
       };
-      const dids = [.../* @__PURE__ */ new Set([issuer.did, logSigner.did, ...attestors])].filter((d) => !d.startsWith(DID_KEY3)).map((d) => res.get(d)).filter(Boolean);
+      const checkers = a.evidence.map((e) => e.body?.identityAssurance?.checkedBy).filter((d) => typeof d === "string");
+      const dids = [.../* @__PURE__ */ new Set([issuer.did, logSigner.did, ...attestors, ...checkers])].filter((d) => !d.startsWith(DID_KEY3)).map((d) => res.get(d)).filter(Boolean);
       const process2 = {
         invited: a.invitations.length,
         committed: committed.length,
@@ -2657,8 +3434,10 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         late: [...a.late],
         notCommitted,
         ...(a.removed ?? []).length ? { removed: a.removed.map((r) => r.attestationId).sort() } : {},
-        ...shortfall.length ? { shortfall } : {}
+        ...shortfall.length ? { shortfall } : {},
+        ...(a.evidenceLog ?? []).length ? { evidenceAdded: [...new Set(a.evidenceLog.map((x) => x.evidence))].sort() } : {}
       };
+      const credId = uuidFrom(a.id + ":" + bundleHash);
       const doc = buildCredential({
         bundle,
         issuer,
@@ -2669,7 +3448,8 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
         log: embedded,
         dids,
         now: nowMs(),
-        id: uuidFrom(a.id + ":" + bundleHash)
+        id: credId,
+        ...status ? { credentialStatus: statusEntry({ listUrl: status.url, index: allocateStatus(credId) }) } : {}
       });
       store.put("credentials", doc.id, doc);
       a.state = "finalized";
@@ -2683,9 +3463,33 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       const a = getRec(id);
       return view === "operator" ? clone3(a) : publicView(a);
     },
+    /** Operator action: revoke a credential by setting its bit in the status list. Never undone by this engine; recorded in the events stream. */
+    revokeCredential(id, { reason } = {}) {
+      if (!status) throw err3("no_status_list", "this engine was started without a status list (config statusUrl)", 409);
+      const c = engine.getCredential(id);
+      if (!c.credentialStatus) throw err3("no_status", "this credential was issued without a credentialStatus entry and cannot be revoked by list", 409);
+      if (reason !== void 0 && (typeof reason !== "string" || reason.length > 200)) throw err3("bad_reason", "reason must be a string of up to 200 characters");
+      const index = Number(c.credentialStatus.statusListIndex);
+      const d = statusDoc();
+      if (d.revoked.includes(index)) return { revoked: id, index, already: true };
+      d.revoked.push(index);
+      d.revoked.sort((x, y) => x - y);
+      d.history.push({ credential: id, index, at: nowIso(), ...reason ? { reason } : {} });
+      store.put("status", "revocation", d);
+      store.append("events", { type: "credential-revoked", credential: id, index, at: nowIso(), ...reason ? { reason } : {} });
+      return { revoked: id, index, already: false };
+    },
+    /** The signed BitstringStatusListCredential as of now. Publish it as the file at status.url. */
+    statusListCredential({ ttlHours } = {}) {
+      if (!status) throw err3("no_status_list", "this engine was started without a status list (config statusUrl)", 409);
+      const d = statusDoc();
+      const bytes = newBitstring(d.bits);
+      for (const i of d.revoked) setBit(bytes, i);
+      return buildStatusListCredential({ url: status.url, issuer, bytes, now: nowMs(), ttlHours: ttlHours ?? status.ttlHours ?? 168 });
+    },
     getCredential(id) {
-      const c = typeof id === "string" && ID_RE2.test(id) ? store.get("credentials", id) : null;
-      if (!c) throw err("credential_unknown", "no such credential: " + id, 404);
+      const c = typeof id === "string" && ID_RE3.test(id) ? store.get("credentials", id) : null;
+      if (!c) throw err3("credential_unknown", "no such credential: " + id, 404);
       return c;
     },
     listAssessments() {
@@ -2696,7 +3500,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       if (template === void 0) {
         try {
           const tid = doc?.sanad?.template?.id;
-          const rec = typeof tid === "string" && ID_RE2.test(tid) ? store.get("templates", tid) : null;
+          const rec = typeof tid === "string" && ID_RE3.test(tid) ? store.get("templates", tid) : null;
           if (rec && rec.hash === doc.sanad.template.hash) template = rec.template;
         } catch {
         }
@@ -2719,12 +3523,12 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     previewRecognition(assessmentId, { policy } = {}) {
       const a = getRec(assessmentId);
       const t = engine.getTemplate(a.templateId);
-      if (policy !== void 0 && (policy === null || typeof policy !== "object" || Array.isArray(policy))) throw err("bad_policy", "policy must be an object");
+      if (policy !== void 0 && (policy === null || typeof policy !== "object" || Array.isArray(policy))) throw err3("bad_policy", "policy must be an object");
       const base = policy ? { ...policy } : policyFromTemplate(t, today());
       delete base.id;
       const pol = { ...base, asOf: policy?.asOf ?? today() };
       const pp = validatePolicy(pol);
-      if (pp.length) throw err("bad_policy", "policy refused: " + pp.join("; "));
+      if (pp.length) throw err3("bad_policy", "policy refused: " + pp.join("; "));
       const revealed = Object.keys(a.reveals).sort();
       const hist = finalizedStats(), stats = {};
       for (const k of revealed) {
@@ -2743,7 +3547,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
       try {
         recognition = recognise(bundle, pol);
       } catch (e) {
-        throw err("bad_policy", "the recognition function refused the policy: " + (e?.message ?? e));
+        throw err3("bad_policy", "the recognition function refused the policy: " + (e?.message ?? e));
       }
       return {
         preview: true,
@@ -2759,7 +3563,7 @@ function createEngine({ store, issuer, logSigner, logId = "sanad-log", resolver,
     ticketFor(assessmentId, attestationId) {
       const a = getRec(assessmentId);
       const inv2 = a.invitations.find((i) => i.attestationId === attestationId);
-      if (!inv2) throw err("not_invited", "no invitation " + attestationId, 404);
+      if (!inv2) throw err3("not_invited", "no invitation " + attestationId, 404);
       const t = engine.getTemplate(a.templateId);
       const ev = a.evidence.find((e) => e.id === inv2.evidence);
       return clone3({
@@ -2810,25 +3614,25 @@ function createDemoAttestor(name, seed) {
 
 // engine/src/http.mjs
 import { createServer } from "node:http";
-import { createHash as createHash4, timingSafeEqual } from "node:crypto";
-import { readFileSync as readFileSync2 } from "node:fs";
-import { dirname, join as join2 } from "node:path";
+import { createHash as createHash5, timingSafeEqual } from "node:crypto";
+import { readFileSync as readFileSync4 } from "node:fs";
+import { dirname as dirname3, join as join4 } from "node:path";
 import { fileURLToPath } from "node:url";
 var BODY_LIMIT = 256 * 1024;
-var HERE = dirname(fileURLToPath(import.meta.url));
-var STATIC_DIR = join2(HERE, "../static");
+var HERE = dirname3(fileURLToPath(import.meta.url));
+var STATIC_DIR = join4(HERE, "../static");
 var FILES = { "/": ["index.html", "text/html; charset=utf-8"], "/app.js": ["app.js", "text/javascript; charset=utf-8"], "/sanad-client.js": ["sanad-client.js", "text/javascript; charset=utf-8"], "/style.css": ["style.css", "text/css; charset=utf-8"] };
 var CSP = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 var SECURITY = { "x-content-type-options": "nosniff", "referrer-policy": "no-referrer", "cache-control": "no-store" };
 var MAX_ENTRIES = 1e3;
 var DRAIN_LIMIT = 1024 * 1024;
-var err2 = (code, message, status = 400) => new EngineError(code, message, status);
-var sha2 = (s) => createHash4("sha256").update(s).digest();
-var isObj5 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
+var err4 = (code, message, status = 400) => new EngineError(code, message, status);
+var sha3 = (s) => createHash5("sha256").update(s).digest();
+var isObj9 = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 function readBody(req) {
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve2, reject) => {
     const ct = String(req.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
-    if (ct !== "application/json") return reject(err2("unsupported_media_type", "content-type must be application/json", 415));
+    if (ct !== "application/json") return reject(err4("unsupported_media_type", "content-type must be application/json", 415));
     const chunks = [];
     let n = 0;
     let dead = false;
@@ -2840,7 +3644,7 @@ function readBody(req) {
       }
       if (n > BODY_LIMIT) {
         dead = true;
-        reject(err2("body_too_large", "the body is larger than " + BODY_LIMIT + " bytes", 413));
+        reject(err4("body_too_large", "the body is larger than " + BODY_LIMIT + " bytes", 413));
         return;
       }
       chunks.push(c);
@@ -2851,7 +3655,7 @@ function readBody(req) {
       try {
         text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
       } catch {
-        return reject(err2("bad_json", "the body is not valid UTF-8"));
+        return reject(err4("bad_json", "the body is not valid UTF-8"));
       }
       try {
         scanJsonText(text);
@@ -2862,19 +3666,19 @@ function readBody(req) {
       try {
         v = JSON.parse(text);
       } catch {
-        return reject(err2("bad_json", "the body is not valid JSON"));
+        return reject(err4("bad_json", "the body is not valid JSON"));
       }
       try {
         checkIJson(v);
       } catch (e) {
         return reject(e);
       }
-      resolve(v);
+      resolve2(v);
     });
     req.on("error", () => {
       if (!dead) {
         dead = true;
-        reject(err2("bad_request", "the request could not be read"));
+        reject(err4("bad_request", "the request could not be read"));
       }
     });
   });
@@ -2882,22 +3686,22 @@ function readBody(req) {
 var intParam = (q, name, def) => {
   const v = q.get(name);
   if (v === null) return def;
-  if (!/^\d{1,9}$/.test(v)) throw err2("bad_query", name + " must be a non-negative integer");
+  if (!/^\d{1,9}$/.test(v)) throw err4("bad_query", name + " must be a non-negative integer");
   return Number(v);
 };
 function createHttpServer({ engine, operatorToken, serveStatic = true, onError = (m) => process.stderr.write(m + "\n") } = {}) {
-  if (!engine) throw err2("bad_config", "an engine is required");
-  if (typeof operatorToken !== "string" || operatorToken.length < 16) throw err2("bad_config", "operatorToken must be a string of at least 16 characters");
-  const tokenHash = sha2(operatorToken);
+  if (!engine) throw err4("bad_config", "an engine is required");
+  if (typeof operatorToken !== "string" || operatorToken.length < 16) throw err4("bad_config", "operatorToken must be a string of at least 16 characters");
+  const tokenHash = sha3(operatorToken);
   const staticCache = /* @__PURE__ */ new Map();
   const staticFile = (name) => {
-    if (!staticCache.has(name)) staticCache.set(name, readFileSync2(join2(STATIC_DIR, name)));
+    if (!staticCache.has(name)) staticCache.set(name, readFileSync4(join4(STATIC_DIR, name)));
     return staticCache.get(name);
   };
   const operator = (req) => {
     const h = String(req.headers.authorization ?? "");
     const m = /^Bearer (.+)$/.exec(h);
-    if (!m || !timingSafeEqual(sha2(m[1]), tokenHash)) throw err2("unauthorized", "a valid operator token is required", 401);
+    if (!m || !timingSafeEqual(sha3(m[1]), tokenHash)) throw err4("unauthorized", "a valid operator token is required", 401);
   };
   const routes = [];
   const route = (method, path, handler, op = false) => routes.push({ method, parts: path.split("/").slice(1), handler, op });
@@ -2907,59 +3711,65 @@ function createHttpServer({ engine, operatorToken, serveStatic = true, onError =
   route("GET", "/v1/templates", () => engine.listTemplates());
   route("GET", "/v1/templates/:id", ({ p }) => engine.getTemplate(p.id));
   route("POST", "/v1/dids", ({ body }) => {
-    if (isObj5(body) && "did" in body && "version" in body && "jws" in body) return engine.updateDid(body.did, body.version, body.jws);
+    if (isObj9(body) && "did" in body && "version" in body && "jws" in body) return engine.updateDid(body.did, body.version, body.jws);
     return engine.registerDid(body);
   }, true);
   route("GET", "/v1/dids/:did", ({ p }) => {
     const d = engine.resolver.get(p.did);
-    if (!d) throw err2("did_unknown", "DID not registered: " + p.did, 404);
+    if (!d) throw err4("did_unknown", "DID not registered: " + p.did, 404);
     return d;
   });
   route("POST", "/v1/assessments", ({ body }) => engine.createAssessment(body), true);
   route("GET", "/v1/assessments", () => engine.listAssessments(), true);
   route("GET", "/v1/assessments/:id", ({ p }) => engine.getAssessment(p.id));
+  route("PUT", "/v1/assessments/:id/evidence/:key", ({ p, body }) => {
+    if (!isObj9(body) || !isObj9(body.body)) throw err4("bad_request", "the body must be { body: { ...members to add } }");
+    return engine.addEvidence(p.id, { key: p.key, body: body.body });
+  }, true);
   route("POST", "/v1/assessments/:id/invite", ({ p, body }) => engine.invite(p.id, body), true);
   route("GET", "/v1/assessments/:id/ticket/:att", ({ p }) => engine.ticketFor(p.id, p.att));
   route("POST", "/v1/assessments/:id/preview", ({ p, body }) => {
-    if (!isObj5(body)) throw err2("bad_request", "the body must be an object, optionally { policy }");
+    if (!isObj9(body)) throw err4("bad_request", "the body must be an object, optionally { policy }");
     return engine.previewRecognition(p.id, { policy: body.policy });
   });
-  route("POST", "/v1/assessments/:id/invitations/:att/remove", ({ p, body }) => engine.removeInvitation(p.id, p.att, { reason: isObj5(body) ? body.reason : void 0 }), true);
+  route("POST", "/v1/assessments/:id/invitations/:att/remove", ({ p, body }) => engine.removeInvitation(p.id, p.att, { reason: isObj9(body) ? body.reason : void 0 }), true);
   route("POST", "/v1/assessments/:id/close-invitations", ({ p }) => engine.closeInvitations(p.id), true);
   route("POST", "/v1/assessments/:id/commit", ({ p, body }) => engine.commit(p.id, body));
   route("POST", "/v1/assessments/:id/reveal", ({ p, body }) => engine.reveal(p.id, body));
-  route("POST", "/v1/assessments/:id/finalize", ({ p, body }) => engine.finalize(p.id, { allowShortfall: isObj5(body) && body.allowShortfall === true }), true);
+  route("POST", "/v1/assessments/:id/finalize", ({ p, body }) => engine.finalize(p.id, { allowShortfall: isObj9(body) && body.allowShortfall === true }), true);
+  route("POST", "/v1/credentials/:id/revoke", ({ p, body }) => engine.revokeCredential(p.id, { reason: isObj9(body) ? body.reason : void 0 }), true);
+  route("GET", "/v1/status/revocation", () => engine.statusListCredential());
   route("GET", "/v1/credentials/:id", ({ p }) => engine.getCredential(p.id));
   route("POST", "/v1/verify", ({ body }) => {
-    if (!isObj5(body) || !("credential" in body)) throw err2("bad_request", "the body must be { credential, policy | useRecommendedPolicy, asOf?, trustedIssuers?, trustedLogKeys?, ... } (DESIGN section 8)");
+    if (!isObj9(body) || !("credential" in body)) throw err4("bad_request", "the body must be { credential, policy | useRecommendedPolicy, asOf?, trustedIssuers?, trustedLogKeys?, ... } (DESIGN section 8)");
     const c = body.credential, b = c?.sanad?.bundle, l = c?.sanad?.log;
-    if (Array.isArray(b?.attestations) && b.attestations.length > VERIFY_LIMITS.attestations || Array.isArray(b?.evidence) && b.evidence.length > VERIFY_LIMITS.evidence || Array.isArray(l?.entries) && l.entries.length > VERIFY_LIMITS.logEntries || Array.isArray(c?.sanad?.dids) && c.sanad.dids.length > VERIFY_LIMITS.dids) throw err2("too_large", "the credential has more attestations, evidence items, log entries or DID histories than one verification call accepts");
+    if (Array.isArray(b?.attestations) && b.attestations.length > VERIFY_LIMITS.attestations || Array.isArray(b?.evidence) && b.evidence.length > VERIFY_LIMITS.evidence || Array.isArray(l?.entries) && l.entries.length > VERIFY_LIMITS.logEntries || Array.isArray(c?.sanad?.dids) && c.sanad.dids.length > VERIFY_LIMITS.dids) throw err4("too_large", "the credential has more attestations, evidence items, log entries or DID histories than one verification call accepts");
     const opts = {};
     if (body.policy !== void 0) {
-      if (!isObj5(body.policy)) throw err2("bad_request", "policy must be an object");
+      if (!isObj9(body.policy)) throw err4("bad_request", "policy must be an object");
       opts.policy = body.policy;
     }
     for (const k of ["trustedIssuers", "trustedLogKeys", "trustedLogIds", "allowedAttestors"]) {
       if (body[k] === void 0) continue;
-      if (!Array.isArray(body[k]) || !body[k].every((x) => typeof x === "string")) throw err2("bad_request", k + " must be a list of strings");
+      if (!Array.isArray(body[k]) || !body[k].every((x) => typeof x === "string")) throw err4("bad_request", k + " must be a list of strings");
       opts[k] = body[k];
     }
     for (const k of ["useRecommendedPolicy", "useVerifierClock", "allowUnpinned", "allowIssuerStatistics", "allowEmbeddedDids", "diagnose"]) {
       if (body[k] === void 0) continue;
-      if (typeof body[k] !== "boolean") throw err2("bad_request", k + " must be true or false");
+      if (typeof body[k] !== "boolean") throw err4("bad_request", k + " must be true or false");
       opts[k] = body[k];
     }
     for (const k of ["pinnedKeys", "attestorStats"]) {
       if (body[k] === void 0) continue;
-      if (!isObj5(body[k])) throw err2("bad_request", k + " must be an object");
+      if (!isObj9(body[k])) throw err4("bad_request", k + " must be an object");
       opts[k] = body[k];
     }
     if (body.trustedDidHistories !== void 0) {
-      if (!Array.isArray(body.trustedDidHistories)) throw err2("bad_request", "trustedDidHistories must be a list");
+      if (!Array.isArray(body.trustedDidHistories)) throw err4("bad_request", "trustedDidHistories must be a list");
       opts.trustedDidHistories = body.trustedDidHistories;
     }
     if (body.asOf !== void 0) {
-      if (typeof body.asOf !== "string") throw err2("bad_request", "asOf must be a string");
+      if (typeof body.asOf !== "string") throw err4("bad_request", "asOf must be a string");
       opts.asOf = body.asOf;
     }
     return engine.verifyCredential(c, opts);
@@ -2968,21 +3778,21 @@ function createHttpServer({ engine, operatorToken, serveStatic = true, onError =
   route("GET", "/v1/log/entries", ({ q }) => {
     const size = engine.log.size();
     const from = intParam(q, "from", 0), to = Math.min(intParam(q, "to", size), size, from + MAX_ENTRIES);
-    if (from > to) throw err2("bad_query", "from must not exceed to");
+    if (from > to) throw err4("bad_query", "from must not exceed to");
     return { size, from, to, entries: engine.log.entries(from, to) };
   });
   route("GET", "/v1/log/inclusion", ({ q }) => {
     const index = intParam(q, "index", null);
-    if (index === null) throw err2("bad_query", "index is required");
+    if (index === null) throw err4("bad_query", "index is required");
     const size = intParam(q, "size", engine.log.size());
-    if (size > engine.log.size() || index >= size) throw err2("bad_query", "index and size must lie inside the log");
+    if (size > engine.log.size() || index >= size) throw err4("bad_query", "index and size must lie inside the log");
     return engine.log.inclusion(index, size);
   });
   route("GET", "/v1/log/consistency", ({ q }) => {
     const m = intParam(q, "m", null);
-    if (m === null) throw err2("bad_query", "m is required");
+    if (m === null) throw err4("bad_query", "m is required");
     const n = intParam(q, "n", engine.log.size());
-    if (n > engine.log.size() || m > n) throw err2("bad_query", "m and n must satisfy m <= n <= log size");
+    if (n > engine.log.size() || m > n) throw err4("bad_query", "m and n must satisfy m <= n <= log size");
     return engine.log.consistency(m, n);
   });
   route("GET", "/v1/attestors/:did/stats", ({ p }) => engine.stats(p.did));
@@ -3022,13 +3832,13 @@ function createHttpServer({ engine, operatorToken, serveStatic = true, onError =
       try {
         segs = url.pathname.split("/").slice(1).map((s) => decodeURIComponent(s));
       } catch {
-        throw err2("bad_path", "the path is not valid");
+        throw err4("bad_path", "the path is not valid");
       }
       const m = match(method, segs);
-      if (m === null) throw err2("not_found", "no such route", 404);
-      if (m === "method") throw err2("method_not_allowed", "method not allowed", 405);
+      if (m === null) throw err4("not_found", "no such route", 404);
+      if (m === "method") throw err4("method_not_allowed", "method not allowed", 405);
       if (m.r.op) operator(req);
-      const body = method === "POST" ? await readBody(req) : void 0;
+      const body = method === "POST" || method === "PUT" ? await readBody(req) : void 0;
       const out = await m.r.handler({ p: m.p, q: url.searchParams, body, req });
       return send(res, 200, out, { "content-type": "application/json; charset=utf-8" });
     } catch (e) {
@@ -3051,15 +3861,25 @@ function createHttpServer({ engine, operatorToken, serveStatic = true, onError =
 export {
   ATTESTATION_TYP,
   BODY_LIMIT,
+  BUNDLE_FILES,
+  COSIGN_TYP,
   CREDENTIAL_TYP,
   CSP,
   DID_LIMITS,
   DID_UPDATE_TYP,
   EngineError,
+  IDENTITY_LEVELS,
+  IDENTITY_TYP,
+  ISSUER_CARD_TYP,
   MAX_DEPTH,
+  MIN_LIST_BITS,
   NONCE_RE,
   NOTICE,
+  PUBLICATION_SCOPES,
+  REQUIRE_FLAGS,
+  SITTING_MEMBERS,
   STATIC_DIR,
+  STATUS_LIST_TYP,
   VERIFY_LIMITS,
   assertTemplate,
   attestationStatement,
@@ -3067,15 +3887,20 @@ export {
   b64u,
   base58btcDecode,
   base58btcEncode,
+  buildBundleFiles,
   buildCredential,
+  buildStatusListCredential,
   bundleHashOf,
   checkCommit,
   checkIJson,
+  checkIdentitySignature,
   checkReveal,
+  checkStatus,
   commitFor,
   commitStatement,
   consistencyProof,
   core_exports as core,
+  cosignStatement,
   createEngine,
   createFileStore,
   createHttpServer,
@@ -3083,12 +3908,17 @@ export {
   createMemoryStore,
   createResolver,
   createSqliteStore,
+  decodeList,
   demo_keys_exports as demo,
   didKeyFromPublicKey,
+  encodeList,
   exportPrivateKey,
   fail,
   fromB64u,
   generateKeyPair,
+  getBit,
+  identityRank,
+  identityStatement,
   importPrivateKey,
   inclusionProof,
   isIsoDate,
@@ -3100,9 +3930,12 @@ export {
   leafBytes,
   leafHash,
   levelFromNative,
+  makeCosignature,
   makeSigner,
   merkleRoot,
+  missingRequired,
   nativeOfNonce,
+  newBitstring,
   newNonce,
   nodeHash,
   nonceWithNative,
@@ -3113,16 +3946,31 @@ export {
   prepareReveal,
   publicKeyFromDidKey,
   publicKeyOf,
+  publishCheckpoint,
+  readBundlePath,
+  readTree,
+  readWitnessDir,
+  readmeText,
+  runWitness,
   scanJsonText,
   sealBundle,
+  setBit,
+  signIdentityAssurance,
   signJws,
+  sittingProblems,
   sqliteAvailable,
+  statusEntry,
+  statusEntryProblems,
   templateHash,
   validatePolicy,
   validateTemplate,
+  verifyBundleFiles,
   verifyCheckpoint,
   verifyConsistency,
+  verifyCosignature,
   verifyCredential,
   verifyInclusion,
-  verifyJws
+  verifyJws,
+  verifyWitnesses,
+  writeFiles
 };

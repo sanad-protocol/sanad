@@ -104,6 +104,8 @@ export function createHttpServer({ engine, operatorToken, serveStatic = true, on
   route('POST', '/v1/assessments/:id/commit', ({ p, body }) => engine.commit(p.id, body));
   route('POST', '/v1/assessments/:id/reveal', ({ p, body }) => engine.reveal(p.id, body));
   route('POST', '/v1/assessments/:id/finalize', ({ p, body }) => engine.finalize(p.id, { allowShortfall: isObj(body) && body.allowShortfall === true }), true);
+  route('POST', '/v1/credentials/:id/revoke', ({ p, body }) => engine.revokeCredential(p.id, { reason: isObj(body) ? body.reason : undefined }), true);
+  route('GET', '/v1/status/revocation', () => engine.statusListCredential());
   route('GET', '/v1/credentials/:id', ({ p }) => engine.getCredential(p.id));
   route('POST', '/v1/verify', ({ body }) => {
     if (!isObj(body) || !('credential' in body)) throw err('bad_request', 'the body must be { credential, policy | useRecommendedPolicy, asOf?, trustedIssuers?, trustedLogKeys?, ... } (DESIGN section 8)');

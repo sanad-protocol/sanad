@@ -164,8 +164,12 @@ export interface VerifyOptions {
   minIdentityLevel?: IdentityLevel;
   /** Fail unless this many witnesses have cosigned a checkpoint that is consistent with the credential's log (see verifyWitnessed). */
   requireWitnesses?: number;
-  /** Checkpoint cosignatures to evaluate with requireWitnesses (from witness directories). */
+  /** The witnesses (DIDs) the verifier trusts; only their cosignatures count. */
+  trustedWitnesses?: string[];
+  /** Cosigned checkpoints and the consistency proofs from the credential's checkpoint to them. */
   witnessEvidence?: WitnessEvidence;
+  /** Fail (instead of warning) when the credential has a credentialStatus and no statusLists were supplied. */
+  requireStatus?: boolean;
   /** Bitstring Status List credentials (already fetched) used to check revocation of this credential. */
   statusLists?: object[];
   /** Examine the rest of a document whose issuer proof failed (by default verification stops there). */
@@ -175,6 +179,8 @@ export interface VerifyOptions {
 export function verifyCredential(doc: unknown, opts?: VerifyOptions): VerifyReport;
 export const VERIFY_LIMITS: { attestations: number; evidence: number; logEntries: number; dids: number; versionsPerHistory: number; keysPerVersion: number; revokedPerVersion: number };
 export const NOTICE: string;
+export interface WitnessEvidence { cosigned: { checkpoint: Checkpoint; cosignature: Cosignature }[]; consistency?: { m: number; n: number; rootM: string; rootN: string; proof: string[] }[]; }
+export interface Cosignature { witness: string; witnessedAt: string; jws: string; }
 export const CREDENTIAL_TYP: 'sanad-credential+jws';
 export const ATTESTATION_TYP: 'sanad-attestation+jws';
 export function sealBundle(a: { skill: string; claimedLevel: Level; subject: string; evidence: object[]; attestations: { statement: AttestationStatement; signature: string }[]; attestors: Record<string, { sittings: number; agreement: number }> }): any;
@@ -206,6 +212,10 @@ export interface Engine {
   previewRecognition(assessmentId: string, opts?: { policy?: Omit<Policy, 'asOf'> & { asOf?: string } }): RecognitionPreview;
   /** Enforces the template's attestor minimum and live sitting; `allowShortfall` is the operator's recorded override. Safe to retry after a crash. */
   finalize(assessmentId: string, opts?: { allowShortfall?: boolean }): Credential;
+  /** Operator: set the credential's bit in the Bitstring Status List (needs the `status` option). */
+  revokeCredential(id: string, opts?: { reason?: string }): { revoked: string; index: number; already: boolean };
+  /** The signed BitstringStatusListCredential as of now; publish it at status.url. */
+  statusListCredential(opts?: { ttlHours?: number }): StatusListCredential;
   getAssessment(id: string, opts?: { view?: 'public' | 'operator' }): AssessmentView;
   getCredential(id: string): Credential;
   listAssessments(): { id: string; templateId: string; subject: string; state: string; credentialId: string | null; createdAt: string }[];
@@ -216,7 +226,7 @@ export interface Engine {
   resolver: Resolver;
   info(): { engine: string; alg: string; issuer: string; logId: string; logKey: string; time: string; today: string };
 }
-export function createEngine(cfg: { store: Store; issuer: Signer; logSigner: Signer; logId?: string; resolver?: Resolver; clock?: Clock }): Engine;
+export function createEngine(cfg: { store: Store; issuer: Signer; logSigner: Signer; logId?: string; resolver?: Resolver; clock?: Clock; status?: { url: string; bits?: number; ttlHours?: number } }): Engine;
 
 // ---- transparency log
 export interface Checkpoint { payload: { logId: string; size: number; rootHash: string; timestamp: string }; jws: string | null; }
@@ -274,3 +284,38 @@ export function signIdentityAssurance(a: { signer: { did: string; sign(typ: stri
 export function sittingProblems(body: unknown): string[];
 export function missingRequired(body: unknown, templateItem: object | null): string[];
 export function checkIdentitySignature(body: SittingBody, resolver: Pick<Resolver, 'verifyStatement'>): { ok: boolean; reason?: string };
+
+// ---- revocation (Bitstring Status List)
+export const STATUS_LIST_TYP: 'sanad-status-list+jws';
+export const MIN_LIST_BITS: number;
+export interface StatusEntry { id: string; type: 'BitstringStatusListEntry'; statusPurpose: 'revocation'; statusListIndex: string; statusListCredential: string; }
+export interface StatusListCredential { '@context': string[]; id: string; type: string[]; issuer: string; validFrom: string; validUntil: string; credentialSubject: { id: string; type: 'BitstringStatusList'; statusPurpose: 'revocation'; encodedList: string }; proof: { type: string; verificationMethod: string; created: string; jws: string }; }
+export function newBitstring(bits?: number): Uint8Array;
+export function setBit(bytes: Uint8Array, index: number, value?: boolean): void;
+export function getBit(bytes: Uint8Array, index: number): boolean;
+export function encodeList(bytes: Uint8Array): string;
+export function decodeList(encoded: string): Uint8Array;
+export function statusEntry(a: { listUrl: string; index: number }): StatusEntry;
+export function statusEntryProblems(e: unknown): string[];
+export function buildStatusListCredential(a: { url: string; issuer: Signer; bytes: Uint8Array; now: number | string | Date; ttlHours?: number }): StatusListCredential;
+export function checkStatus(a: { credential: object; lists: object[]; now: number | string | Date; resolver: Pick<Resolver, 'verifyStatement'> }): { ok: boolean; revoked: boolean; detail: string; applicable: boolean };
+
+// ---- checkpoint publication, witnesses
+export const COSIGN_TYP: 'sanad-cosignature+jws';
+export function publishCheckpoint(a: { engine: Engine; dir: string; daily?: boolean; force?: boolean; entries?: boolean }): { published: boolean; reason?: string; size?: number; file?: string };
+export function cosignStatement(a: { checkpoint: Checkpoint; logKey: string; witness: string; witnessedAt: string }): object;
+export function makeCosignature(a: { signer: Pick<Signer, 'did' | 'sign'>; checkpoint: Checkpoint; logKey: string; now: number | string | Date }): Cosignature;
+export function verifyCosignature(a: { checkpoint: Checkpoint; cosignature: Cosignature; logKey: string; resolver: Pick<Resolver, 'verifyStatement'> }): { ok: boolean; reason?: string };
+export function verifyWitnesses(a: { checkpoint: Checkpoint; logKey: string; resolver: Pick<Resolver, 'verifyStatement'>; cosigned: WitnessEvidence['cosigned']; consistency?: WitnessEvidence['consistency']; trusted?: string[] }): { count: number; witnesses: string[]; problems: string[] };
+export function runWitness(a: { source: string; outDir: string; signer: Pick<Signer, 'did' | 'sign'>; logKey?: string; resolver?: Resolver; now?: number | string | Date; fetchImpl?: typeof fetch }): Promise<{ status: 'cosigned' | 'unchanged'; size: number; rootHash: string }>;
+export function readWitnessDir(dir: string, logId: string): WitnessEvidence['cosigned'];
+
+// ---- static bundle export
+export const ISSUER_CARD_TYP: 'sanad-issuer-card+jws';
+export const BUNDLE_FILES: string[];
+export function readmeText(a: { bundleHash: string; base?: string | null }): string;
+export function buildBundleFiles(a: { engine: Engine; credentialId: string; issuerSigner?: Signer; base?: string | null; checkpointsDir?: string | null; witnessDirs?: string[]; now?: number | string | Date }): { bundleHash: string; files: Map<string, string> };
+export function writeFiles(root: string, files: Map<string, string>): void;
+export function readTree(root: string): Map<string, string>;
+export function readBundlePath(path: string): Map<string, string>;
+export function verifyBundleFiles(files: Map<string, string>, opts?: VerifyOptions & { bundle?: string }): VerifyReport;

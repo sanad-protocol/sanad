@@ -9,6 +9,7 @@ import { assertTemplate, templateHash, policyFromTemplate, nativeOfNonce, valida
 import { checkCommit, checkReveal, NONCE_RE } from './commit.mjs';
 import { attestorStats } from './stats.mjs';
 import { createLog } from './log.mjs';
+import { MIN_LIST_BITS, newBitstring, setBit, buildStatusListCredential, statusEntry } from './statuslist.mjs';
 import { sittingProblems, missingRequired, checkIdentitySignature } from './evidence.mjs';
 import { sealBundle, bundleHashOf as hashBundle, buildCredential, verifyCredential as verifyDoc, ATTESTATION_TYP } from './bundle.mjs';
 
@@ -28,7 +29,8 @@ const err = (code, message, status = 400) => new EngineError(code, message, stat
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const isDateTime = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/.test(s) && !Number.isNaN(Date.parse(s));
 
-export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', resolver, clock = { now: () => Date.now() } } = {}) {
+export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', resolver, clock = { now: () => Date.now() }, status } = {}) {
+  if (status !== undefined && !(status && typeof status.url === 'string' && /^https?:\/\/\S+$/.test(status.url))) throw err('bad_config', 'status must be { url } with the http(s) URL at which the status list credential will be published');
   if (!store) throw err('bad_config', 'a store is required');
   if (!issuer || !issuer.did || !issuer.kid || typeof issuer.sign !== 'function') throw err('bad_config', 'issuer must be { did, kid, sign }');
   if (!logSigner || !logSigner.did || typeof logSigner.sign !== 'function') throw err('bad_config', 'logSigner must be { did, kid, sign }');
@@ -70,6 +72,18 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
     const { id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, late, state, credentialId } = a;
     return clone({ id, templateId, templateHash: th, subject, claimedLevel, evidence, commitBy, revealBy, createdAt, invitations, removed: a.removed ?? [], commits, reveals, late, state, credentialId: credentialId ?? null, revealOpen: open });
   }
+
+  // Revocation (SPEC 8.3): one bit per credential in a Bitstring Status List the operator publishes. Indices are allocated once per credential id.
+  const statusDoc = () => store.get('status', 'revocation') ?? { next: 0, bits: status?.bits ?? MIN_LIST_BITS, revoked: [], history: [] };
+  const allocateStatus = (credId) => {
+    const have = store.get('statusIndex', credId);
+    if (have) return have.index;
+    const d = statusDoc();
+    if (d.next >= d.bits) throw err('status_list_full', 'the status list has no free position; configure a larger list', 409);
+    const index = d.next; d.next += 1;
+    store.put('status', 'revocation', d); store.put('statusIndex', credId, { index }); // a crash between the two leaks one position, never reuses one
+    return index;
+  };
 
   let statsMemo = null; // invalidated when an assessment is finalized (single process per store)
   const finalizedStats = (excludeId) => {
@@ -354,9 +368,10 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
         ...(shortfall.length ? { shortfall } : {}),
         ...((a.evidenceLog ?? []).length ? { evidenceAdded: [...new Set(a.evidenceLog.map((x) => x.evidence))].sort() } : {}),
       };
+      const credId = uuidFrom(a.id + ':' + bundleHash);
       const doc = buildCredential({
         bundle, issuer, template: { id: t.id, hash: a.templateHash }, assessment: a.id, process, policy: t.policy, log: embedded, dids, now: nowMs(),
-        id: uuidFrom(a.id + ':' + bundleHash),
+        id: credId, ...(status ? { credentialStatus: statusEntry({ listUrl: status.url, index: allocateStatus(credId) }) } : {}),
       });
       store.put('credentials', doc.id, doc);
       a.state = 'finalized'; a.credentialId = doc.id; a.finalizedAt = nowIso();
@@ -368,6 +383,29 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
     getAssessment(id, { view = 'public' } = {}) {
       const a = getRec(id);
       return view === 'operator' ? clone(a) : publicView(a);
+    },
+    /** Operator action: revoke a credential by setting its bit in the status list. Never undone by this engine; recorded in the events stream. */
+    revokeCredential(id, { reason } = {}) {
+      if (!status) throw err('no_status_list', 'this engine was started without a status list (config statusUrl)', 409);
+      const c = engine.getCredential(id);
+      if (!c.credentialStatus) throw err('no_status', 'this credential was issued without a credentialStatus entry and cannot be revoked by list', 409);
+      if (reason !== undefined && (typeof reason !== 'string' || reason.length > 200)) throw err('bad_reason', 'reason must be a string of up to 200 characters');
+      const index = Number(c.credentialStatus.statusListIndex);
+      const d = statusDoc();
+      if (d.revoked.includes(index)) return { revoked: id, index, already: true };
+      d.revoked.push(index); d.revoked.sort((x, y) => x - y);
+      d.history.push({ credential: id, index, at: nowIso(), ...(reason ? { reason } : {}) });
+      store.put('status', 'revocation', d);
+      store.append('events', { type: 'credential-revoked', credential: id, index, at: nowIso(), ...(reason ? { reason } : {}) });
+      return { revoked: id, index, already: false };
+    },
+    /** The signed BitstringStatusListCredential as of now. Publish it as the file at status.url. */
+    statusListCredential({ ttlHours } = {}) {
+      if (!status) throw err('no_status_list', 'this engine was started without a status list (config statusUrl)', 409);
+      const d = statusDoc();
+      const bytes = newBitstring(d.bits);
+      for (const i of d.revoked) setBit(bytes, i);
+      return buildStatusListCredential({ url: status.url, issuer, bytes, now: nowMs(), ttlHours: ttlHours ?? status.ttlHours ?? 168 });
     },
     getCredential(id) {
       const c = typeof id === 'string' && ID_RE.test(id) ? store.get('credentials', id) : null;

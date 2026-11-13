@@ -4,6 +4,8 @@ import { canonical, hashOf, attestationHashOf, attestationPayload, recognise, in
 import { createResolver, base58btcEncode, DID_LIMITS } from './keys.mjs';
 import { templateHash, validatePolicy } from './template.mjs';
 import { leafHash, leafBytes, verifyInclusion, verifyCheckpoint } from './log.mjs';
+import { verifyWitnesses } from './witness.mjs';
+import { statusEntryProblems, checkStatus } from './statuslist.mjs';
 import { sittingProblems, missingRequired, checkIdentitySignature, identityRank } from './evidence.mjs';
 
 const DID_KEY = 'did:key:';
@@ -47,7 +49,7 @@ export function bundleHashOf(bundle) {
  * Builds and signs the credential document.
  * @param {{ bundle: object, issuer: { did: string, kid: string, sign: Function }, template: { id: string, hash: string }, assessment: string, process: object, policy: object, log: object, dids?: object[], now: number|string|Date, id?: string }} p
  */
-export function buildCredential({ bundle, issuer, template, assessment, process, policy, log, dids = [], now, id }) {
+export function buildCredential({ bundle, issuer, template, assessment, process, policy, log, dids = [], now, id, credentialStatus }) {
   const validFrom = new Date(now).toISOString();
   const bundleHash = bundleHashOf(bundle);
   const doc = {
@@ -58,6 +60,7 @@ export function buildCredential({ bundle, issuer, template, assessment, process,
     validFrom,
     credentialSubject: { id: bundle.subject, skill: bundle.skill, claimedLevel: bundle.claimedLevel },
     evidence: [{ type: ['Evidence', 'SanadBundle'], id: 'urn:sanad:bundle:' + bundleHash, bundleHash, alg: SANAD_VERSION }],
+    ...(credentialStatus ? { credentialStatus: clone(credentialStatus) } : {}),
     sanad: { bundle: clone(bundle), template: { id: template.id, hash: template.hash }, assessment, process: clone(process), policy: clone(policy), log: clone(log), dids: clone(dids) },
   };
   const jws = issuer.sign(CREDENTIAL_TYP, clone(doc));
@@ -80,10 +83,12 @@ const POLICY_KEYS = ['minAttestors', 'requireLive', 'halfLifeMonths', 'minAttest
 function shapeProblems(doc) {
   const p = [];
   const need = (cond, msg) => { if (!cond) p.push(msg); };
-  if (!exactly(doc, ['@context', 'type', 'id', 'issuer', 'validFrom', 'credentialSubject', 'evidence', 'sanad', 'proof'])) {
-    p.push('top level members must be exactly @context, type, id, issuer, validFrom, credentialSubject, evidence, sanad, proof');
+  const TOP = ['@context', 'type', 'id', 'issuer', 'validFrom', 'credentialSubject', 'evidence', 'sanad', 'proof'];
+  if (!exactly(doc, TOP) && !exactly(doc, [...TOP, 'credentialStatus'])) {
+    p.push('top level members must be exactly @context, type, id, issuer, validFrom, credentialSubject, evidence, sanad, proof, and optionally credentialStatus');
     return p;
   }
+  if ('credentialStatus' in doc) p.push(...statusEntryProblems(doc.credentialStatus));
   need(canonical(doc['@context']) === canonical(['https://www.w3.org/ns/credentials/v2']), '@context is not the VC 2.0 context');
   need(canonical(doc.type) === canonical(['VerifiableCredential', 'SanadCredential']), 'type is not VerifiableCredential, SanadCredential');
   need(isStr(doc.id) && /^urn:uuid:[0-9a-f-]{36}$/.test(doc.id), 'id is not a urn:uuid');
@@ -290,6 +295,26 @@ export function verifyCredential(doc, opts = {}) {
         if (!leaves.has('bundle:' + doc.evidence[0].bundleHash)) why.push('the bundle hash is not a verified leaf of the log');
       }
       ADD(checks, 'log', why.length === 0, why.length ? why.join('; ') : `${l.entries.length} embedded entr${l.entries.length === 1 ? 'y' : 'ies'} verified against the checkpoint of size ${cp.payload.size}; every attestation hash and the bundle hash are leaves`);
+    }
+
+    // witnesses: independent parties that cosigned a checkpoint consistent with this credential's (SPEC 8.2)
+    if (opts.requireWitnesses !== undefined) {
+      const n = opts.requireWitnesses;
+      if (!Number.isInteger(n) || n < 0) ADD(checks, 'witnesses', false, 'requireWitnesses must be a non-negative integer');
+      else if (n > 0) {
+        const ev = isObj(opts.witnessEvidence) ? opts.witnessEvidence : {};
+        const w = verifyWitnesses({ checkpoint: sanad.log.checkpoint, logKey: sanad.log.logKey, resolver, cosigned: ev.cosigned, consistency: ev.consistency, trusted: opts.trustedWitnesses });
+        ADD(checks, 'witnesses', w.count >= n, w.count >= n ? `${w.count} pinned witness(es) cosigned a checkpoint consistent with the credential's: ${w.witnesses.join(', ')}` : `${w.count} of the required ${n} pinned witnesses: ${w.problems.join('; ') || 'none supplied'}`);
+      }
+    }
+
+    // revocation: the Bitstring Status List the credential names (SPEC 8.3)
+    if (doc.credentialStatus !== undefined) {
+      if (Array.isArray(opts.statusLists)) {
+        const r = checkStatus({ credential: doc, lists: opts.statusLists, now: opts.now ?? Date.now(), resolver });
+        ADD(checks, 'revocation', r.ok, r.detail);
+      } else if (opts.requireStatus === true) ADD(checks, 'revocation', false, 'the credential names a status list (' + doc.credentialStatus.statusListCredential + ') and none was supplied (requireStatus)');
+      else warnings.push('revocation not checked: the credential names the status list ' + doc.credentialStatus.statusListCredential + '; supply it (statusLists) to learn whether it was revoked');
     }
 
     // pins: keys are what is trusted; DIDs are names the verifier chose
