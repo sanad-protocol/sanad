@@ -1,5 +1,13 @@
 # Changelog
 
+## Engine 0.3 (unreleased)
+
+- Sitting evidence schema, identity assurance, `addEvidence`, template flags.
+- Static bundle export and offline verification of a directory; browser verifier; Python verifier from the spec text.
+- Checkpoint publication, witnesses and cosignatures, `--require-witnesses`.
+- Revocation with a W3C Bitstring Status List.
+- `spec/SPEC-v0.2.md` (draft): text brought in step with the code; unbuilt features marked as later (section 15).
+
 ## 0.2.0 (unreleased)
 
 ### Core (`@sanad-protocol/core` 0.2.0)

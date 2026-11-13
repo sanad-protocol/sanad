@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'">
+<title>Sanad verifier</title>
+<style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#555;--ok:#0a6b2d;--bad:#a30f1f;--warn:#7a5200;--line:#ccc}
+@media (prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--mut:#aaa;--ok:#5fd68a;--bad:#ff8a8a;--warn:#f2c14e;--line:#444}}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,sans-serif;max-width:46rem;margin:0 auto;padding:1rem}
+label{display:block;margin:.7rem 0 .2rem;font-weight:600}input,select,textarea,button{font:inherit;width:100%;box-sizing:border-box;padding:.4rem;color:var(--fg);background:var(--bg);border:1px solid var(--line)}
+input[type=checkbox]{width:auto}button{cursor:pointer;margin-top:1rem;font-weight:600}.ok{color:var(--ok)}.bad{color:var(--bad)}.warn{color:var(--warn)}.note,small{color:var(--mut)}
+li{margin:.2rem 0;word-break:break-word}textarea{min-height:11rem;font-family:ui-monospace,monospace}
+</style></head><body>
+<h1>Sanad verifier</h1>
+<p>Checks an exported Sanad bundle directory in this page. No network, no libraries: nothing you choose here leaves your device. The issuer and the log key must come from a source you trust; the directory cannot vouch for itself.</p>
+<label for="dir">Folder (the base folder holding <code>bundles/</code>, or one bundle folder)</label><input id="dir" type="file" webkitdirectory multiple>
+<label for="zip">or a zip of it</label><input id="zip" type="file" accept=".zip,application/zip"><p id="loaded" role="status"><small>Nothing loaded.</small></p>
+<label for="issuer">Issuer DID you trust</label><input id="issuer" placeholder="did:key:z...">
+<label for="logkey">Log key DID you trust</label><input id="logkey" placeholder="did:key:z...">
+<label for="policy">Your policy (JSON; the issuer's recommendation is not used)</label><textarea id="policy" spellcheck="false"></textarea>
+<label for="witnesses">Witness DIDs you trust (optional, comma separated)</label><input id="witnesses">
+<label for="nwit">Witnesses required</label><input id="nwit" type="number" min="1" value="1">
+<label for="minid">Minimum identity assurance</label><select id="minid"><option value="">none</option><option>A0</option><option>A1</option><option>A2</option></select>
+<label for="pinned">Pinned did:web keys (JSON, optional)</label><input id="pinned" placeholder='{"did:web:x.example":["z..."]}'>
+<label><input id="reqstatus" type="checkbox"> Fail if revocation cannot be checked</label>
+<button id="run" type="button">Verify</button>
+<div id="result" aria-live="polite"></div>
+<script>/*__CORE__*/</script>
+<script>/*__VERIFIER__*/</script>
+<script>/*__UI__*/</script>
+</body></html>
