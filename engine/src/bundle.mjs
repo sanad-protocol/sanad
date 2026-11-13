@@ -4,6 +4,7 @@ import { canonical, hashOf, attestationHashOf, attestationPayload, recognise, in
 import { createResolver, base58btcEncode, DID_LIMITS } from './keys.mjs';
 import { templateHash, validatePolicy } from './template.mjs';
 import { leafHash, leafBytes, verifyInclusion, verifyCheckpoint } from './log.mjs';
+import { sittingProblems, missingRequired, checkIdentitySignature, identityRank } from './evidence.mjs';
 
 const DID_KEY = 'did:key:';
 const KINDS = ['auto', 'sitting', 'artifact', 'peer'];
@@ -70,8 +71,8 @@ export function buildCredential({ bundle, issuer, template, assessment, process,
 export const VERIFY_LIMITS = { attestations: 200, evidence: 200, logEntries: 2000, dids: 100, versionsPerHistory: DID_LIMITS.versions, keysPerVersion: DID_LIMITS.keys, revokedPerVersion: DID_LIMITS.revoked };
 export const NOTICE = 'Experimental software: the Sanad engine has not been cryptographically reviewed. A passing report records what was signed and logged, not that the attestors were honest. Backdating with a stolen attestor key, collusion and help off camera are not detected.';
 const PROCESS_BASE = ['invited', 'committed', 'revealed', 'missing', 'late', 'notCommitted'];
-const processOk = (pr) => isObj(pr) && PROCESS_BASE.every((k) => k in pr) && Object.keys(pr).every((k) => PROCESS_BASE.includes(k) || k === 'removed' || k === 'shortfall')
-  && ['removed', 'shortfall'].every((k) => !(k in pr) || (Array.isArray(pr[k]) && pr[k].every(isStr)));
+const processOk = (pr) => isObj(pr) && PROCESS_BASE.every((k) => k in pr) && Object.keys(pr).every((k) => PROCESS_BASE.includes(k) || k === 'removed' || k === 'shortfall' || k === 'evidenceAdded')
+  && ['removed', 'shortfall', 'evidenceAdded'].every((k) => !(k in pr) || (Array.isArray(pr[k]) && pr[k].every(isStr)));
 
 const POLICY_KEYS = ['minAttestors', 'requireLive', 'halfLifeMonths', 'minAttestorSittings', 'minAgreement', 'maxInferenceDepth', 'inferenceDecay'];
 
@@ -216,6 +217,34 @@ export function verifyCredential(doc, opts = {}) {
     {
       const bad = bundle.evidence.filter((e) => e.body.kind !== e.kind || e.body.date !== e.date).map((e) => e.id);
       ADD(checks, 'evidence-consistency', bad.length === 0, bad.length ? 'kind or date differs from the hashed body in: ' + bad.join(', ') : 'kind and date equal the hashed body in every evidence item');
+    }
+
+    // sitting evidence: the members of SPEC 3.3 that are present are well formed; the identity statement is signed; the template's demands are met
+    {
+      const sittings = bundle.evidence.filter((e) => e.kind === 'sitting');
+      if (sittings.length) {
+        const why = [], soft = [];
+        const hasShortfall = Array.isArray(sanad.process.shortfall) && sanad.process.shortfall.length > 0;
+        for (const e of sittings) {
+          const sp = sittingProblems(e.body);
+          if (sp.length) { why.push(`${e.id}: ${sp.join(', ')}`); continue; }
+          if ('identityAssurance' in e.body) { const ck = checkIdentitySignature(e.body, resolver); if (!ck.ok) why.push(`${e.id}: identity statement refused (${ck.reason})`); }
+          if (opts.minIdentityLevel !== undefined) {
+            const need = identityRank(opts.minIdentityLevel);
+            if (need < 0) why.push('minIdentityLevel must be A0, A1 or A2');
+            else if (identityRank(e.body.identityAssurance?.level) < need) why.push(`${e.id}: identity assurance ${e.body.identityAssurance?.level ?? 'absent'} is below the required ${opts.minIdentityLevel}`);
+          }
+          if (opts.template !== undefined) {
+            const item = opts.template?.evidence?.find((x) => sanad.assessment + '.' + x.key === e.id);
+            const miss = missingRequired(e.body, item);
+            if (miss.length && !hasShortfall) why.push(`${e.id}: the template requires ${miss.join(', ')} and it is missing`);
+          }
+          const absent = ['paperFingerprint', 'strokeLogHead', 'recordingSha256'].filter((k) => !(k in e.body));
+          if (absent.length) soft.push(`${e.id} carries no ${absent.join(', ')}`);
+        }
+        for (const m of soft) warnings.push('sitting evidence: ' + m + ' (the hash binds nothing about the sitting until it is present)');
+        ADD(checks, 'sitting-evidence', why.length === 0, why.length ? why.join('; ') : `${sittings.length} sitting evidence item(s): members well formed, identity statements verify`);
+      }
     }
 
     // ids belong to this assessment

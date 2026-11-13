@@ -9,6 +9,7 @@ import { assertTemplate, templateHash, policyFromTemplate, nativeOfNonce, valida
 import { checkCommit, checkReveal, NONCE_RE } from './commit.mjs';
 import { attestorStats } from './stats.mjs';
 import { createLog } from './log.mjs';
+import { sittingProblems, missingRequired, checkIdentitySignature } from './evidence.mjs';
 import { sealBundle, bundleHashOf as hashBundle, buildCredential, verifyCredential as verifyDoc, ATTESTATION_TYP } from './bundle.mjs';
 
 const ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
@@ -134,6 +135,7 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
         if (('kind' in e.body && e.body.kind !== kind) || ('date' in e.body && e.body.date !== e.date)) throw err('bad_evidence', 'evidence ' + e.key + ': body.kind and body.date must equal the item kind and date');
         if (kind === 'auto' && !(Number.isInteger(e.body.autoLevel) && e.body.autoLevel >= 0 && e.body.autoLevel <= 5)) throw err('bad_evidence', 'evidence ' + e.key + ': an automatic record needs body.autoLevel, an integer from 0 to 5 (the level a replay yields); without it the recognition function ignores the item');
         const body = { ...clone(e.body), kind, date: e.date };
+        if (kind === 'sitting') { const sp = sittingProblems(body); if (sp.length) throw err('bad_evidence', 'evidence ' + e.key + ': ' + sp.join('; ')); if ('identityAssurance' in body) { const ck = checkIdentitySignature(body, res); if (!ck.ok) throw err('bad_evidence', 'evidence ' + e.key + ': the identityAssurance signature is refused (' + ck.reason + ')'); } }
         sealed.push(sealEvidence({ id: `${aid}.${e.key}`, kind, date: e.date, summary: e.summary, body }));
       }
       const start = nowMs();
@@ -199,6 +201,44 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       store.append('events', { type: 'invitation-removed', assessment: a.id, attestationId, attestor: inv.attestor, at: nowIso(), ...(reason ? { reason } : {}) });
       save(a);
       return { removed: attestationId, invited: a.invitations.length };
+    },
+
+    /**
+     * Adds members to an evidence item of an open assessment: the recording hash, the stroke-log head or the paper fingerprint exist only after the sitting.
+     * Refused once any attestor has committed (`evidence_sealed`): from the first commit the evidence is fixed. Members already present are never
+     * overwritten (`evidence_conflict` if the value differs, a no-op if it is the same); the evidence hash is recomputed; the addition is recorded in the
+     * assessment's history and in the events stream, and the credential lists the item in `process.evidenceAdded`.
+     * @returns {{ evidence: string, hash: string, added: string[], changed: boolean }}
+     */
+    addEvidence(assessmentId, { key, body } = {}) {
+      const a = getRec(assessmentId);
+      if (a.state !== 'open') throw err('state', 'the assessment is finalized', 409);
+      if (Object.keys(a.commits).length > 0 || a.revealOpenedAt || Object.keys(a.reveals).length > 0) throw err('evidence_sealed', 'an attestor has already committed: the evidence is fixed', 409);
+      const idx = a.evidence.findIndex((e) => e.id === key || e.id === `${a.id}.${key}`);
+      if (idx < 0) throw err('bad_evidence', 'unknown evidence item: ' + key);
+      if (body === null || typeof body !== 'object' || Array.isArray(body)) throw err('bad_evidence', 'body must be an object');
+      checkIJson(body);
+      const ev = a.evidence[idx];
+      if (('kind' in body && body.kind !== ev.kind) || ('date' in body && body.date !== ev.date)) throw err('bad_evidence', 'body.kind and body.date must equal the item kind and date');
+      const added = [];
+      for (const [k, v] of Object.entries(body)) {
+        if (k === 'kind' || k === 'date') continue;
+        if (has(ev.body, k)) { if (hashOf(ev.body[k]) !== hashOf(v)) throw err('evidence_conflict', 'member ' + k + ' is already set to a different value; a set member is never overwritten', 409); } else added.push(k);
+      }
+      if (added.length === 0) return { evidence: ev.id, hash: ev.hash, added: [], changed: false };
+      const merged = { ...clone(ev.body) };
+      for (const k of added) merged[k] = clone(body[k]);
+      if (ev.kind === 'sitting') {
+        const sp = sittingProblems(merged); if (sp.length) throw err('bad_evidence', sp.join('; '));
+        if ('identityAssurance' in merged) { const ck = checkIdentitySignature(merged, res); if (!ck.ok) throw err('bad_evidence', 'the identityAssurance signature is refused (' + ck.reason + ')'); }
+      }
+      const sealedItem = sealEvidence({ id: ev.id, kind: ev.kind, date: ev.date, summary: ev.summary, body: merged });
+      const before = ev.hash;
+      a.evidence[idx] = sealedItem;
+      (a.evidenceLog ??= []).push({ evidence: ev.id, at: nowIso(), added: added.sort(), hashBefore: before, hashAfter: sealedItem.hash });
+      store.append('events', { type: 'evidence-added', assessment: a.id, evidence: ev.id, at: nowIso(), added, hashBefore: before, hashAfter: sealedItem.hash });
+      save(a);
+      return { evidence: ev.id, hash: sealedItem.hash, added, changed: true };
     },
 
     commit(assessmentId, { attestationId, payload, jws } = {}) {
@@ -276,6 +316,11 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
       for (const k of revealed) if (!a.reveals[k].statement.conflictDeclared) byEv.get(a.reveals[k].statement.evidence)?.add(a.reveals[k].statement.attestor); // a declared conflict does not count toward the minimum
       for (const e of a.evidence) if (e.kind !== 'auto' && byEv.get(e.id).size < t.attestors.min) shortfall.push(`${e.id}: ${byEv.get(e.id).size} revealed attestor(s) without a declared conflict, template minimum ${t.attestors.min}`);
       if (t.liveSitting && !a.evidence.some((e) => e.kind === 'sitting' && byEv.get(e.id).size > 0)) shortfall.push('liveSitting: no sitting evidence has a revealed attestor');
+      for (const e of a.evidence) {
+        const item = t.evidence.find((x) => `${a.id}.${x.key}` === e.id);
+        const miss = missingRequired(e.body, item);
+        if (miss.length) shortfall.push(`${e.id}: the template requires ${miss.join(', ')} in the evidence body and it is missing`);
+      }
       if (shortfall.length && !allowShortfall) throw err('below_template_minimum', 'the template requirements are not met (' + shortfall.join('; ') + '); pass allowShortfall to finalize anyway, which is recorded in the credential', 409);
 
       const attestors = [...new Set(revealed.map((k) => a.reveals[k].statement.attestor))];
@@ -301,11 +346,13 @@ export function createEngine({ store, issuer, logSigner, logId = 'sanad-log', re
         proofs: idx.map((i) => ({ index: i, size: cp.payload.size, proof: log.inclusion(i, cp.payload.size).proof })),
         checkpoint: cp,
       };
-      const dids = [...new Set([issuer.did, logSigner.did, ...attestors])].filter((d) => !d.startsWith(DID_KEY)).map((d) => res.get(d)).filter(Boolean);
+      const checkers = a.evidence.map((e) => e.body?.identityAssurance?.checkedBy).filter((d) => typeof d === 'string');
+      const dids = [...new Set([issuer.did, logSigner.did, ...attestors, ...checkers])].filter((d) => !d.startsWith(DID_KEY)).map((d) => res.get(d)).filter(Boolean);
       const process = {
         invited: a.invitations.length, committed: committed.length, revealed: revealed.length, missing, late: [...a.late], notCommitted,
         ...((a.removed ?? []).length ? { removed: a.removed.map((r) => r.attestationId).sort() } : {}),
         ...(shortfall.length ? { shortfall } : {}),
+        ...((a.evidenceLog ?? []).length ? { evidenceAdded: [...new Set(a.evidenceLog.map((x) => x.evidence))].sort() } : {}),
       };
       const doc = buildCredential({
         bundle, issuer, template: { id: t.id, hash: a.templateHash }, assessment: a.id, process, policy: t.policy, log: embedded, dids, now: nowMs(),

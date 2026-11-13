@@ -89,6 +89,10 @@ export function createHttpServer({ engine, operatorToken, serveStatic = true, on
   route('POST', '/v1/assessments', ({ body }) => engine.createAssessment(body), true);
   route('GET', '/v1/assessments', () => engine.listAssessments(), true);
   route('GET', '/v1/assessments/:id', ({ p }) => engine.getAssessment(p.id));
+  route('PUT', '/v1/assessments/:id/evidence/:key', ({ p, body }) => {
+    if (!isObj(body) || !isObj(body.body)) throw err('bad_request', 'the body must be { body: { ...members to add } }');
+    return engine.addEvidence(p.id, { key: p.key, body: body.body });
+  }, true);
   route('POST', '/v1/assessments/:id/invite', ({ p, body }) => engine.invite(p.id, body), true);
   route('GET', '/v1/assessments/:id/ticket/:att', ({ p }) => engine.ticketFor(p.id, p.att));
   route('POST', '/v1/assessments/:id/preview', ({ p, body }) => {
@@ -183,7 +187,7 @@ export function createHttpServer({ engine, operatorToken, serveStatic = true, on
       if (m === null) throw err('not_found', 'no such route', 404);
       if (m === 'method') throw err('method_not_allowed', 'method not allowed', 405);
       if (m.r.op) operator(req);
-      const body = method === 'POST' ? await readBody(req) : undefined;
+      const body = method === 'POST' || method === 'PUT' ? await readBody(req) : undefined;
       const out = await m.r.handler({ p: m.p, q: url.searchParams, body, req });
       return send(res, 200, out, { 'content-type': 'application/json; charset=utf-8' });
     } catch (e) {

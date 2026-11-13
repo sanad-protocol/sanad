@@ -73,7 +73,7 @@ export interface Template {
   skill: { id: string; title: string; graphHash?: string; xwalk?: Json };
   levels: { level: Level; label: string }[];
   rubric?: { id: string; criterion: string; descriptors: Record<string, string> }[];
-  evidence: { key: string; kind: 'auto' | 'sitting' | 'artifact' | 'peer'; summary: string; live?: boolean; minutes?: number }[];
+  evidence: { key: string; kind: 'auto' | 'sitting' | 'artifact' | 'peer'; summary: string; live?: boolean; minutes?: number; requireRecordingHash?: boolean; requireStrokeLogHead?: boolean; requireIdentityAssurance?: boolean }[];
   attestors: { min: number; max: number; roles: string[] };
   liveSitting: boolean; deadlines: { commitHours: number; revealHours: number };
   levelMap?: Record<string, Level>;
@@ -125,7 +125,7 @@ export interface AssessmentView {
 export interface Credential {
   '@context': string[]; type: string[]; id: string; issuer: string; validFrom: string;
   credentialSubject: { id: string; skill: string; claimedLevel: Level }; evidence: object[];
-  sanad: { bundle: any; template: { id: string; hash: string }; assessment: string; process: { invited: number; committed: number; revealed: number; missing: string[]; late: string[]; notCommitted: string[]; removed?: string[]; shortfall?: string[] }; policy: object; log: any; dids: DidHistory[] };
+  sanad: { bundle: any; template: { id: string; hash: string }; assessment: string; process: { invited: number; committed: number; revealed: number; missing: string[]; late: string[]; notCommitted: string[]; removed?: string[]; shortfall?: string[]; evidenceAdded?: string[] }; policy: object; log: any; dids: DidHistory[] };
   proof: { type: string; verificationMethod: string; created: string; jws: string };
 }
 export interface Check { name: string; ok: boolean; detail: string; }
@@ -160,6 +160,14 @@ export interface VerifyOptions {
   allowIssuerStatistics?: boolean;
   allowedAttestors?: string[];
   template?: Template;
+  /** Fail unless every sitting evidence item carries a signed identity assurance of at least this level. */
+  minIdentityLevel?: IdentityLevel;
+  /** Fail unless this many witnesses have cosigned a checkpoint that is consistent with the credential's log (see verifyWitnessed). */
+  requireWitnesses?: number;
+  /** Checkpoint cosignatures to evaluate with requireWitnesses (from witness directories). */
+  witnessEvidence?: WitnessEvidence;
+  /** Bitstring Status List credentials (already fetched) used to check revocation of this credential. */
+  statusLists?: object[];
   /** Examine the rest of a document whose issuer proof failed (by default verification stops there). */
   diagnose?: boolean;
   graph?: { requires(id: string): readonly string[] };
@@ -191,6 +199,8 @@ export interface Engine {
   closeInvitations(assessmentId: string): { closed: true; invited: number };
   removeInvitation(assessmentId: string, attestationId: string, opts?: { reason?: string }): { removed: string; invited: number };
   ticketFor(assessmentId: string, attestationId: string): SigningTicket;
+  /** Adds members to an evidence item before the first commit; never overwrites; recorded in process.evidenceAdded. */
+  addEvidence(assessmentId: string, a: { key: string; body: object }): { evidence: string; hash: string; added: string[]; changed: boolean };
   commit(assessmentId: string, req: CommitRequest): { committed: number; of: number };
   reveal(assessmentId: string, req: RevealRequest): { revealed: number; of: number };
   previewRecognition(assessmentId: string, opts?: { policy?: Omit<Policy, 'asOf'> & { asOf?: string } }): RecognitionPreview;
@@ -245,3 +255,22 @@ export const STATIC_DIR: string;
 
 export const core: typeof Core;
 export const demo: { createDemoAttestor(name: string, seed?: Uint8Array | string): { name: string; did: string; kid: string; signer: Signer; privateKeyPkcs8: string } };
+
+// ---- sitting evidence (SPEC 3.3)
+export type IdentityLevel = 'A0' | 'A1' | 'A2';
+export const IDENTITY_LEVELS: IdentityLevel[];
+export function identityRank(level: unknown): number;
+export const IDENTITY_TYP: 'sanad-identity+jws';
+export const SITTING_MEMBERS: string[];
+export const PUBLICATION_SCOPES: string[];
+export const REQUIRE_FLAGS: { requireRecordingHash: 'recordingSha256'; requireStrokeLogHead: 'strokeLogHead'; requireIdentityAssurance: 'identityAssurance' };
+export interface IdentityAssurance { level: IdentityLevel; method: string; checkedBy: string; date: string; candidateKey: string; signature: string; }
+export interface SittingBody {
+  sittingId?: string; paperFingerprint?: string; strokeLogHead?: string; recordingSha256?: string; recordingCipherSha256?: string; recordingBytes?: number;
+  identityAssurance?: IdentityAssurance; publication?: { scope: 'hashes' | 'bundle'; date: string; url?: string }; [k: string]: unknown;
+}
+export function identityStatement(a: { sittingId: string; level: string; method: string; checkedBy: string; date: string; candidateKey: string }): object;
+export function signIdentityAssurance(a: { signer: { did: string; sign(typ: string, payload: unknown): string }; sittingId: string; level: IdentityLevel; method: string; date: string; candidateKey: string }): IdentityAssurance;
+export function sittingProblems(body: unknown): string[];
+export function missingRequired(body: unknown, templateItem: object | null): string[];
+export function checkIdentitySignature(body: SittingBody, resolver: Pick<Resolver, 'verifyStatement'>): { ok: boolean; reason?: string };

@@ -1,6 +1,7 @@
 // Assessment templates: schema check, hash and the recommended verifier policy. Schema in DESIGN.md section 10.
 import { hashOf, policyProblems } from './core.mjs';
 import { EngineError } from './errors.mjs';
+import { REQUIRE_FLAGS } from './evidence.mjs';
 
 const ID_RE = /^[A-Za-z0-9._:-]{1,200}$/;
 const KINDS = ['auto', 'sitting', 'artifact', 'peer'];
@@ -102,7 +103,7 @@ export function validateTemplate(t) {
       t.evidence.forEach((e, i) => {
         const w = 'evidence[' + i + ']';
         if (!isObj(e)) { errors.push(w + ': must be an object'); return; }
-        closed(e, ['key', 'kind', 'summary'], ['live', 'minutes'], w, errors);
+        closed(e, ['key', 'kind', 'summary'], ['live', 'minutes', ...Object.keys(REQUIRE_FLAGS)], w, errors);
         if ('key' in e) {
           if (typeof e.key === 'string' && /^a\d{2,}$/.test(e.key)) errors.push(w + '.key: "' + e.key + '" looks like an attestation id (a01, a02, ...) and would collide with one');
           else if (!(typeof e.key === 'string' && ID_RE.test(e.key))) errors.push(w + '.key: must match ' + ID_RE);
@@ -116,6 +117,7 @@ export function validateTemplate(t) {
         if ('summary' in e && typeof e.summary !== 'string') errors.push(w + '.summary: must be a string');
         if ('live' in e && typeof e.live !== 'boolean') errors.push(w + '.live: must be true or false');
         if ('minutes' in e && !(isNum(e.minutes) && e.minutes > 0)) errors.push(w + '.minutes: must be a positive number');
+        for (const f of Object.keys(REQUIRE_FLAGS)) if (f in e) { if (typeof e[f] !== 'boolean') errors.push(w + '.' + f + ': must be true or false'); else if (e.kind !== 'sitting') errors.push(w + '.' + f + ': only an evidence item of kind sitting can carry it'); }
       });
     }
   }

@@ -8,6 +8,7 @@ export * from './stats.mjs';
 export * from './log.mjs';
 export * from './store/index.mjs';
 export * from './bundle.mjs';
+export * from './evidence.mjs';
 export * from './attestor.mjs';
 export * from './engine.mjs';
 // Demonstration helper, reachable only by name; no default path of the engine uses it.

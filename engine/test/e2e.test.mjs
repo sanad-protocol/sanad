@@ -21,9 +21,9 @@ describe('end to end: honest A, tampered B, silent C', () => {
   it('the untampered credential verifies with every check true', () => {
     const { engine, doc, issuer, logSigner } = run();
     const r = engine.verifyCredential(doc, { useRecommendedPolicy: true });
-    expect(r.checks.map((c) => c.name)).toEqual(['shape', 'issuer-proof', 'bundle-hash', 'evidence-consistency', 'ids', 'attestor-signatures', 'log', 'trusted-issuer', 'trusted-log-key', 'process', 'template', 'policy']);
+    expect(r.checks.map((c) => c.name)).toEqual(['shape', 'issuer-proof', 'bundle-hash', 'evidence-consistency', 'sitting-evidence', 'ids', 'attestor-signatures', 'log', 'trusted-issuer', 'trusted-log-key', 'process', 'template', 'policy']);
     expect(r.checks.every((c) => c.ok)).toBe(true);
-    expect(r.ok).toBe(true); expect(r.warnings).toEqual([]); expect(r.notice).toMatch(/Experimental/);
+    expect(r.ok).toBe(true); expect(r.warnings).toEqual([expect.stringMatching(/^sitting evidence: as-1\.E1 carries no paperFingerprint, strokeLogHead, recordingSha256/)]); expect(r.notice).toMatch(/Experimental/);
     expect(doc.issuer).toBe(issuer.did); expect(doc.sanad.log.logKey).toBe(logSigner.did);
   });
   it('process lists C as missing and the log holds a missing-reveal leaf for C\'s commit', () => {

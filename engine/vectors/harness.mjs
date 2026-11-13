@@ -3,7 +3,7 @@
 // did. `generate.mjs` fills in `expect` from a run, and the result is reviewed by hand: these are regression vectors for this implementation,
 // not an independent check (no second implementation exists yet).
 import { isDeepStrictEqual } from 'node:util';
-import { createEngine, createMemoryStore, makeSigner, keyPairFromSeed, prepareCommit, prepareReveal, core, DID_UPDATE_TYP, signJws, base58btcEncode as base58 } from '../src/index.mjs';
+import { createEngine, createMemoryStore, makeSigner, keyPairFromSeed, prepareCommit, prepareReveal, core, DID_UPDATE_TYP, signJws, base58btcEncode as base58, signIdentityAssurance } from '../src/index.mjs';
 
 const seed = (n) => new Uint8Array(32).fill(n);
 const HOUR = 3600000;
@@ -74,6 +74,21 @@ export function runVector(vector) {
         }
         observed = e ? { error: e } : { committed: r.committed, of: r.of }; break;
       }
+      case 'addEvidence': {
+        // `identity`: { by: <person name>, level, method, date, candidateSeed, sittingId } adds a signed identityAssurance to the body
+        const body = clone(step.body);
+        if (step.identity) {
+          const id = step.identity;
+          body.identityAssurance = signIdentityAssurance({ signer: people[id.by].signer, sittingId: id.sittingId, level: id.level, method: id.method, date: id.date, candidateKey: mb(makeSigner(keyPairFromSeed(seed(id.candidateSeed)).privateKey)) });
+          if (id.tamperLevel) body.identityAssurance.level = id.tamperLevel;
+        }
+        let r; const e = errCode(() => { r = engine.addEvidence(aid, { key: step.key, body }); });
+        observed = e ? { error: e } : { added: r.added, changed: r.changed, hash: r.hash }; break;
+      }
+      case 'evidenceOf': {
+        const ev = engine.getAssessment(aid).evidence.find((x) => x.id === aid + '.' + step.key);
+        observed = { hash: ev.hash, members: Object.keys(ev.body).sort() }; break;
+      }
       case 'removeInvitation': {
         let r; const e = errCode(() => { r = engine.removeInvitation(aid, step.att); });
         observed = e ? { error: e } : r; break;
@@ -108,7 +123,8 @@ export function runVector(vector) {
           const a = doc.sanad.bundle.attestations.find((x) => x.id === step.flipSignatureOf);
           const sig = a.signature; a.signature = sig.slice(0, -10) + (sig.at(-10) === 'A' ? 'B' : 'A') + sig.slice(-9);
         }
-        const v = engine.verifyCredential(doc, step.policy ? { policy: { ...step.policy, asOf: doc.validFrom.slice(0, 10) }, diagnose: true } : { useRecommendedPolicy: true, diagnose: true });
+        const extra = step.minIdentityLevel ? { minIdentityLevel: step.minIdentityLevel } : {};
+        const v = engine.verifyCredential(doc, step.policy ? { policy: { ...step.policy, asOf: doc.validFrom.slice(0, 10) }, diagnose: true, ...extra } : { useRecommendedPolicy: true, diagnose: true, ...extra });
         observed = { ok: v.ok, failed: v.checks.filter((c) => !c.ok).map((c) => c.name), recognition: compact(v.recognition), dropped: (v.recognition?.dropped ?? []).map((d) => d.id + ':' + d.rule) }; break;
       }
       default: throw new Error('unknown op ' + step.op);
