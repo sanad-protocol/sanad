@@ -1,5 +1,11 @@
 [
   {
+    "id": "2026-11-10-engine",
+    "date": "2026-11-10",
+    "title": "Sanad engine 0.2.0 (unreleased) added to the repository",
+    "summary": "The engine runs an assessment end to end: templates, blind commit and reveal, evidence chain, sealed credential, transparency log and verification under the verifier's own policy. Algorithm sanad-0.1 is unchanged. It has had no external cryptographic review."
+  },
+  {
     "id": "2026-11-07-reference",
     "date": "2026-11-07",
     "title": "Reference implementation and test vectors published",

@@ -1,0 +1,71 @@
+{
+  "logId": "sanad-log",
+  "logKey": "did:key:z6Mko9hTggMwjSTEaJaPUfE6tqcy2xvU6BnNq3e3o8qVBiyH",
+  "entries": [
+    {
+      "index": 0,
+      "leaf": "{\"kind\":\"commit\",\"ref\":\"9bfa9682f8736ceba98226d9f1989eb43fa430544e3721e8943207daef92c288\",\"ts\":\"2026-03-01T09:00:00.000Z\"}"
+    },
+    {
+      "index": 1,
+      "leaf": "{\"kind\":\"commit\",\"ref\":\"dd7e1e744765342ee9ffa884adec2e9e48d0e3391897b1a01598ddfeaec0d516\",\"ts\":\"2026-03-01T09:00:00.000Z\"}"
+    },
+    {
+      "index": 2,
+      "leaf": "{\"kind\":\"attestation\",\"ref\":\"ce33c4ed2ac58f409c8471ebb8c41b7d2b737563b12f1320edad41169d65e130\",\"ts\":\"2026-03-01T09:00:00.000Z\"}"
+    },
+    {
+      "index": 3,
+      "leaf": "{\"kind\":\"attestation\",\"ref\":\"1219aacf0f86602fee34cef6924a6d95203f7056f16e40f8742667b98ca4798e\",\"ts\":\"2026-03-01T09:00:00.000Z\"}"
+    },
+    {
+      "index": 4,
+      "leaf": "{\"kind\":\"bundle\",\"ref\":\"6996bb66c1f67ebc5212fd669c6c3f669d5198d3a2594f5367f635932afa6b6a\",\"ts\":\"2026-03-01T09:00:00.000Z\"}"
+    }
+  ],
+  "proofs": [
+    {
+      "index": 0,
+      "size": 5,
+      "proof": [
+        "8bf79695748f5b859745589f50eacc7a92a8631dcae7ae000f4c61e1cd713e36",
+        "c4572a76e7b8c8dd900a426a868e3b7ba56fed189502d4ef8c39c0de9ea4ef83",
+        "d04d02fd5782827a0b1d2024b4aeffc4f0feaf456023c276f1b39f978db40334"
+      ]
+    },
+    {
+      "index": 1,
+      "size": 5,
+      "proof": [
+        "ee84e47b73d772f4780754f5cbeacaad33e454bc13b3312dea2cb71d35ef7486",
+        "c4572a76e7b8c8dd900a426a868e3b7ba56fed189502d4ef8c39c0de9ea4ef83",
+        "d04d02fd5782827a0b1d2024b4aeffc4f0feaf456023c276f1b39f978db40334"
+      ]
+    },
+    {
+      "index": 2,
+      "size": 5,
+      "proof": [
+        "5350af74e67ac8ceacadb5eb602a4bf8d53ebc154c02646aa06c07d798a743b6",
+        "0682bb5cfcead959662eda8248a7d05d3c64d98ee1be61915848f5508f85d7ee",
+        "d04d02fd5782827a0b1d2024b4aeffc4f0feaf456023c276f1b39f978db40334"
+      ]
+    },
+    {
+      "index": 3,
+      "size": 5,
+      "proof": [
+        "d24747a51c0c0cb1788e55c31a237fd5be7b1a3b8c626ef26a12a58c8e4624e0",
+        "0682bb5cfcead959662eda8248a7d05d3c64d98ee1be61915848f5508f85d7ee",
+        "d04d02fd5782827a0b1d2024b4aeffc4f0feaf456023c276f1b39f978db40334"
+      ]
+    },
+    {
+      "index": 4,
+      "size": 5,
+      "proof": [
+        "8201a13ab6fed2aedf1202592c9df096cd6dff8c3c3e3e92e6a997d6a0b78453"
+      ]
+    }
+  ]
+}

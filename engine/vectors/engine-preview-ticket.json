@@ -1,0 +1,312 @@
+{
+  "id": "engine-preview-ticket",
+  "description": "The provider time and day, a signing ticket (commit through the ticket alone), and a recognition preview that reads only revealed attestations: with one reveal of two the preview uses a01 only and reports one pending; the final result differs.",
+  "setup": {
+    "clock": "2026-03-01T09:00:00.000Z",
+    "template": {
+      "id": "maths-oral-v1",
+      "version": 1,
+      "title": "Maths oral",
+      "skill": {
+        "id": "analysis.limits",
+        "title": "Limits"
+      },
+      "levels": [
+        {
+          "level": 0,
+          "label": "L0"
+        },
+        {
+          "level": 1,
+          "label": "L1"
+        },
+        {
+          "level": 2,
+          "label": "L2"
+        },
+        {
+          "level": 3,
+          "label": "L3"
+        },
+        {
+          "level": 4,
+          "label": "L4"
+        },
+        {
+          "level": 5,
+          "label": "L5"
+        }
+      ],
+      "evidence": [
+        {
+          "key": "E1",
+          "kind": "sitting",
+          "summary": "Oral sitting"
+        }
+      ],
+      "attestors": {
+        "min": 2,
+        "max": 3,
+        "roles": [
+          "examiner"
+        ]
+      },
+      "liveSitting": true,
+      "deadlines": {
+        "commitHours": 24,
+        "revealHours": 48
+      },
+      "policy": {
+        "id": "p1",
+        "minAttestors": 2,
+        "requireLive": true,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 2,
+        "inferenceDecay": 0.8
+      }
+    },
+    "assessment": {
+      "id": "as-1",
+      "templateId": "maths-oral-v1",
+      "subject": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "claimedLevel": 4,
+      "evidence": [
+        {
+          "key": "E1",
+          "date": "2026-03-01",
+          "summary": "Oral sitting of 40 minutes",
+          "body": {
+            "minutes": 40
+          }
+        }
+      ]
+    },
+    "people": {
+      "A": {
+        "seed": 10
+      },
+      "B": {
+        "seed": 11
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "info",
+      "expect": {
+        "time": "2026-03-01T09:00:00.000Z",
+        "today": "2026-03-01"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "A",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a01"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "B",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a02"
+      }
+    },
+    {
+      "op": "ticket",
+      "who": "A",
+      "att": "as-1.a01",
+      "expect": {
+        "attestor": "matches",
+        "evidence": "as-1.E1",
+        "levels": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "levelMap": null,
+        "serverDay": "2026-03-01",
+        "revealOpen": false,
+        "templateHash": "8f94c315c9ad5d6f4455785b7b336000af01e44b19ea8a9246a09cb934cdaa4f"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "A",
+      "att": "as-1.a01",
+      "level": 5,
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaa",
+      "viaTicket": true,
+      "expect": {
+        "committed": 1,
+        "of": 2
+      }
+    },
+    {
+      "op": "preview",
+      "expect": {
+        "provisional": true,
+        "policySource": "template-recommendation",
+        "counts": {
+          "invited": 2,
+          "committed": 1,
+          "revealed": 0,
+          "pending": 1,
+          "notCommitted": 1
+        },
+        "recognition": {
+          "status": "not-recognised",
+          "level": 0,
+          "confidence": 0
+        },
+        "used": []
+      }
+    },
+    {
+      "op": "commit",
+      "who": "B",
+      "att": "as-1.a02",
+      "level": 1,
+      "nonce": "bbbbbbbbbbbbbbbbbbbbbb",
+      "viaTicket": true,
+      "expect": {
+        "committed": 2,
+        "of": 2
+      }
+    },
+    {
+      "op": "preview",
+      "expect": {
+        "provisional": true,
+        "policySource": "template-recommendation",
+        "counts": {
+          "invited": 2,
+          "committed": 2,
+          "revealed": 0,
+          "pending": 2,
+          "notCommitted": 0
+        },
+        "recognition": {
+          "status": "not-recognised",
+          "level": 0,
+          "confidence": 0
+        },
+        "used": []
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "A",
+      "att": "as-1.a01",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 1,
+        "of": 2
+      }
+    },
+    {
+      "op": "preview",
+      "expect": {
+        "provisional": true,
+        "policySource": "template-recommendation",
+        "counts": {
+          "invited": 2,
+          "committed": 2,
+          "revealed": 1,
+          "pending": 1,
+          "notCommitted": 0
+        },
+        "recognition": {
+          "status": "provisional",
+          "level": 0,
+          "confidence": 0.6
+        },
+        "used": [
+          "as-1.a01"
+        ]
+      }
+    },
+    {
+      "op": "preview",
+      "policy": {
+        "minAttestors": 1,
+        "requireLive": false,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 0,
+        "inferenceDecay": 0.8
+      },
+      "expect": {
+        "provisional": true,
+        "policySource": "verifier-supplied",
+        "counts": {
+          "invited": 2,
+          "committed": 2,
+          "revealed": 1,
+          "pending": 1,
+          "notCommitted": 0
+        },
+        "recognition": {
+          "status": "recognised",
+          "level": 4,
+          "confidence": 0.6
+        },
+        "used": [
+          "as-1.a01"
+        ]
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "B",
+      "att": "as-1.a02",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 2,
+        "of": 2
+      }
+    },
+    {
+      "op": "finalize",
+      "expect": {
+        "bundleHash": "c0ddbf1f20d13784cb7afc178b2eb6b9b1db7d1e779aaf60d2b4109c6914bc8f",
+        "process": {
+          "invited": 2,
+          "committed": 2,
+          "revealed": 2,
+          "missing": [],
+          "late": [],
+          "notCommitted": []
+        },
+        "checksPass": true,
+        "recognition": {
+          "status": "recognised",
+          "level": 1,
+          "confidence": 0.51
+        },
+        "attestorStats": {
+          "did:key:z6Mkj1MDZKcfx9AX5CeXHdysiGkRLzBbALyFuShD6wNeY1E3": {
+            "sittings": 0,
+            "agreement": 0
+          },
+          "did:key:z6MkmNL6xksdEJENGk9Z1qqGsY5njKQdjU1UhnUEUvWyQUVX": {
+            "sittings": 0,
+            "agreement": 0
+          }
+        },
+        "logSize": 5,
+        "logRoot": "230c5ba651c8fcae993561ea256354de06575920249364b9ecc77fe60a4175c3"
+      }
+    }
+  ]
+}

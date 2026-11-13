@@ -1,0 +1,18 @@
+[
+  {
+    "checkpoint": {
+      "payload": {
+        "logId": "sanad-log",
+        "size": 10,
+        "rootHash": "92752f1aea2179461f21f5f4a2dd80f73230a5a4caa36c01cde2a54464bc50e1",
+        "timestamp": "2026-03-01T09:00:01.000Z"
+      },
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa285aFRnZ013alNURWFKYVBVZkU2dHFjeTJ4dlU2Qm5OcTNlM284cVZCaXlII3o2TWtvOWhUZ2dNd2pTVEVhSmFQVWZFNnRxY3kyeHZVNkJuTnEzZTNvOHFWQml5SCIsInR5cCI6InNhbmFkLWNoZWNrcG9pbnQrandzIn0..YH2SqHik0iBj-jgxm2ed2bDfOp6eU1ZgbHJTKkfC5ZThXp-fsJ3e7FYs5fBGfT0NSdd9ph0O3HCO1ABYUcgjBw"
+    },
+    "cosignature": {
+      "witness": "did:key:z6MkknhhwAGsRrcTTthPSsBbQtrNX6CMqt4poro5jdP6uCue",
+      "witnessedAt": "2026-03-01T09:00:01.000Z",
+      "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa2tuaGh3QUdzUnJjVFR0aFBTc0JiUXRyTlg2Q01xdDRwb3JvNWpkUDZ1Q3VlI3o2TWtrbmhod0FHc1JyY1RUdGhQU3NCYlF0ck5YNkNNcXQ0cG9ybzVqZFA2dUN1ZSIsInR5cCI6InNhbmFkLWNvc2lnbmF0dXJlK2p3cyJ9..wxqQoAbH4Ai1TPgOECZ9CaVUtEr-fK5tSfvcx4sb7sDAMJtdJirEMV9eJkZXGAbkhOZVXRpQx7YKFDDjHkSsCQ"
+    }
+  }
+]

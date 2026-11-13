@@ -1,0 +1,38 @@
+[
+  {
+    "id": "did:web:examiner.example",
+    "versions": [
+      {
+        "version": 1,
+        "validFrom": "2026-01-01",
+        "keys": [
+          {
+            "id": "#k1",
+            "publicKeyMultibase": "z3BuW9SR5tG6VFK4MmkQQ3Ak8ny1K1Vv5Uz7is8Aa5pwG"
+          }
+        ],
+        "revoked": []
+      },
+      {
+        "version": 2,
+        "validFrom": "2026-03-01",
+        "keys": [
+          {
+            "id": "#k1",
+            "publicKeyMultibase": "z3BuW9SR5tG6VFK4MmkQQ3Ak8ny1K1Vv5Uz7is8Aa5pwG"
+          },
+          {
+            "id": "#k2",
+            "publicKeyMultibase": "zFMUEmtxhU46GzhKF4FW9MLJdQWiLgjiXP9TYRWSrqTpV"
+          }
+        ],
+        "revoked": [
+          {
+            "id": "#k1",
+            "from": "2026-03-01"
+          }
+        ]
+      }
+    ]
+  }
+]

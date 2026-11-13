@@ -27,11 +27,32 @@ export function dayNumber(iso: string): number {
   const t = Date.UTC(+m[1], +m[2] - 1, +m[3]); const d = new Date(t);
   return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] ? t / 86400000 : NaN;
 }
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+/** Every field of a policy, checked. Returns the problems (empty when the policy can be evaluated). All seven fields and asOf are required. */
+export function policyProblems(p: unknown): string[] {
+  const why: string[] = [];
+  if (p === null || typeof p !== 'object' || Array.isArray(p)) return ['policy must be an object'];
+  const o = p as Record<string, unknown>;
+  if (!(isNum(o.minAttestors) && Number.isInteger(o.minAttestors) && o.minAttestors >= 1)) why.push('minAttestors must be an integer of at least 1');
+  if (typeof o.requireLive !== 'boolean') why.push('requireLive must be true or false');
+  if (!(isNum(o.halfLifeMonths) && o.halfLifeMonths > 0)) why.push('halfLifeMonths must be a number above 0');
+  if (!(isNum(o.minAttestorSittings) && o.minAttestorSittings >= 0)) why.push('minAttestorSittings must be a number of at least 0');
+  if (!(isNum(o.minAgreement) && o.minAgreement >= 0 && o.minAgreement <= 1)) why.push('minAgreement must be a number from 0 to 1');
+  if (!(isNum(o.maxInferenceDepth) && Number.isInteger(o.maxInferenceDepth) && o.maxInferenceDepth >= 0)) why.push('maxInferenceDepth must be an integer of at least 0');
+  if (!(isNum(o.inferenceDecay) && o.inferenceDecay >= 0 && o.inferenceDecay <= 1)) why.push('inferenceDecay must be a number from 0 to 1');
+  if (typeof o.asOf !== 'string' || Number.isNaN(dayNumber(o.asOf))) why.push('asOf must be an ISO date yyyy-mm-dd');
+  return why;
+}
+/** Throws RangeError listing every problem with the policy. */
+export function assertPolicy(p: unknown): asserts p is Policy { const w = policyProblems(p); if (w.length) throw new RangeError(w.join('; ')); }
+
 const levelOk = (v: unknown): v is Level => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 5;
 
 export interface Integrity { id: string; ok: boolean; reason: string }
-/** R1 as a function of its own (the page's verify panel shows it): every evidence hash, every attestation hash, reveal-against-commit and chain link. */
-export function checkIntegrity(cred: Credential): { evidence: Integrity[]; attestations: Integrity[] } {
+/** Options of R1. `verifySignature` (optional): returns true when the attestation's signature verifies. Without it signatures are not checked (v0.1 behaviour). */
+export interface RecogniseOptions { verifySignature?: (a: Attestation) => boolean; /** Verifier's allow-list: when given, attestations by other attestors are ignored under R2. */ allowAttestor?: (did: string) => boolean }
+/** R1 as a function of its own (the page's verify panel shows it): every evidence hash, every attestation hash, reveal-against-commit and chain link, and the signature when a check is given. */
+export function checkIntegrity(cred: Credential, opts: RecogniseOptions = {}): { evidence: Integrity[]; attestations: Integrity[] } {
   const evs = [...cred.evidence].sort(byId), atts = [...cred.attestations].sort(byId);
   const evidence = evs.map((e): Integrity => {
     const why: string[] = [];
@@ -45,13 +66,17 @@ export function checkIntegrity(cred: Credential): { evidence: Integrity[]; attes
   const evOk = new Map(evidence.map((x) => [x.id, x.ok]));
   const attestations = atts.map((a, i): Integrity => {
     const why: string[] = [];
+    if (a.attestor === REPLAY) why.push('the attestor name "' + REPLAY + '" is reserved for automatic records and cannot be a human attestor');
     if (!levelOk(a.level)) why.push('level is not 0..5');
     else {
       if (attestationHashOf(a) !== a.hash) why.push('its content no longer matches its hash (changed after sealing)');
       if (commitOf(a) !== a.commit) why.push('the revealed mark does not match the commitment made before marking');
     }
+    if (opts.verifySignature) { let good = false; try { good = opts.verifySignature(a) === true; } catch { good = false; } if (!good) why.push('the signature does not verify'); }
     const expectPrev = i === 0 ? 'GENESIS' : atts[i - 1].hash;
     if (a.prev !== expectPrev) why.push('chain break: it does not link to the attestation before it');
+    const dup = atts.slice(0, i).find((x) => x.attestor === a.attestor && x.evidence === a.evidence);
+    if (dup) why.push('duplicate mark: ' + a.attestor + ' already has attestation ' + dup.id + ' on this evidence item (only the first counts)');
     if (!evOk.has(a.evidence)) why.push('it attests evidence "' + a.evidence + '" that is not in the credential');
     else if (!evOk.get(a.evidence)) why.push('it attests evidence "' + a.evidence + '" that failed integrity');
     if (Number.isNaN(dayNumber(a.date))) why.push('date is not a valid yyyy-mm-dd');
@@ -62,15 +87,16 @@ export function checkIntegrity(cred: Credential): { evidence: Integrity[]; attes
 
 interface Item { att: Attestation | null; attestor: string; level: Level; evidence: Evidence }
 
-export function recognise(cred: Credential, policy: Policy): Recognition {
-  if (!(policy.halfLifeMonths > 0) || !Number.isFinite(policy.halfLifeMonths)) throw new RangeError('halfLifeMonths must be a positive number');
-  const asOf = dayNumber(policy.asOf); if (Number.isNaN(asOf)) throw new RangeError('asOf must be an ISO date yyyy-mm-dd');
+export function recognise(cred: Credential, policy: Policy, opts: RecogniseOptions = {}): Recognition {
+  assertPolicy(policy);
+  if (!levelOk(cred.claimedLevel)) throw new RangeError('claimedLevel must be an integer from 0 to 5');
+  const asOf = dayNumber(policy.asOf);
   const minAtt = Math.max(1, Math.floor(policy.minAttestors));
   const steps: Step[] = []; const dropped: Dropped[] = [];
   const evs = [...cred.evidence].sort(byId), atts = [...cred.attestations].sort(byId);
 
   // ---- R1 integrity
-  const integ = checkIntegrity(cred);
+  const integ = checkIntegrity(cred, opts);
   const evBad = new Map(integ.evidence.filter((x) => !x.ok).map((x) => [x.id, x.reason]));
   const attBad = new Map(integ.attestations.filter((x) => !x.ok).map((x) => [x.id, x.reason]));
   steps.push({ rule: 'R1', summary: `Checked ${evs.length} evidence item(s) and ${atts.length} attestation(s): every hash, every reveal against its commitment, and the chain. ${evBad.size + attBad.size} failed.`, inputs: [...evs.map((e) => e.id), ...atts.map((a) => a.id)], effect: evBad.size + attBad.size ? 'failed items are ignored' : 'nothing ignored' });
@@ -92,9 +118,12 @@ export function recognise(cred: Credential, policy: Policy): Recognition {
   for (const a of atts) {
     if (attBad.has(a.id)) continue; const e = evAdm.get(a.evidence); if (!e) continue; // its evidence was dropped (reported on the evidence)
     if (e.kind === 'auto') continue; // an automatic record carries its own replayed level
-    const st = cred.attestors[a.attestor] ?? { sittings: 0, agreement: 0 };
+    // own property and numbers only: an attestor named like an object method, or statistics of the wrong type, count as no statistics
+    const raw = Object.prototype.hasOwnProperty.call(cred.attestors, a.attestor) ? cred.attestors[a.attestor] : undefined;
+    const st = raw && Number.isFinite(raw.sittings) && Number.isFinite(raw.agreement) ? raw : { sittings: 0, agreement: 0 };
     let why = '';
-    if (a.conflictDeclared) why = 'a conflict of interest was declared';
+    if (opts.allowAttestor && !opts.allowAttestor(a.attestor)) why = 'the attestor is not on the verifier\'s allow-list';
+    else if (a.conflictDeclared) why = 'a conflict of interest was declared';
     else if (st.sittings < policy.minAttestorSittings) why = `only ${st.sittings} sitting(s), policy needs ${policy.minAttestorSittings}`;
     else if (st.agreement < policy.minAgreement) why = `agreement with other examiners is ${f2(st.agreement)}, policy needs ${f2(policy.minAgreement)}`;
     if (why) { dropped.push({ id: a.id, rule: 'R2', reason: why }); steps.push({ rule: 'R2', summary: `Attestor ${a.attestor} (attestation ${a.id}) was ignored: ${why}.`, inputs: [a.id, a.attestor], effect: 'dropped' }); continue; }

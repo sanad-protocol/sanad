@@ -29,7 +29,7 @@ export interface Attestation {
   role: string;
   conflictDeclared: boolean;
   date: string;
-  /** v0.1: a placeholder string ("unsigned-v0.1:" + hash). Real signatures (Ed25519 / JWS) are part of v0.2. */
+  /** The attestor's signature. The conformance vectors use a placeholder ("unsigned-v0.1:" + hash); the engine stores a detached JWS (EdDSA, typ sanad-attestation+jws) over the attestation without prev, hash and signature. */
   signature: string;
   /** Blind marking: commit = sha256(canonical({attestor, evidence, level, nonce})), published before the reveal. */
   commit: string;

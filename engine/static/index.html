@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sanad engine demonstration</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+<h1>Sanad engine</h1>
+<p class="note">A demonstration of the open Sanad protocol. Sanad is decentralised assessment of skill, not accreditation: a credential is a recomputable chain of what was observed, and each verifier applies its own policy. This page loads no external code. It has had no cryptographic review.</p>
+
+<section aria-labelledby="h-info">
+<h2 id="h-info">This engine</h2>
+<pre id="info" aria-live="polite">loading...</pre>
+</section>
+
+<section aria-labelledby="h-verify">
+<h2 id="h-verify">Verify a credential</h2>
+<p>Paste a credential. Optionally paste your own policy; without one, the template's recommendation is used and is labelled as such.</p>
+<label for="cred">Credential (JSON)</label>
+<textarea id="cred" rows="6" spellcheck="false"></textarea>
+<label for="policy">Your policy (JSON, optional)</label>
+<textarea id="policy" rows="3" spellcheck="false" placeholder='{"minAttestors":2,"requireLive":true,"halfLifeMonths":24,"minAttestorSittings":0,"minAgreement":0,"maxInferenceDepth":2,"inferenceDecay":0.8}'></textarea>
+<button id="verify" type="button">Verify</button>
+<div id="report" aria-live="polite"></div>
+</section>
+
+<section aria-labelledby="h-att">
+<h2 id="h-att">Act as an attestor in this browser</h2>
+<p>A key pair is made in this page with WebCrypto and stays in this tab. Only signed statements are sent. Reload the page and the key is gone.</p>
+<button id="newkey" type="button">Make a key</button>
+<p>Attestor DID: <code id="did">none yet</code></p>
+<label for="aid">Assessment id</label>
+<input id="aid" autocomplete="off">
+<label for="attid">Attestation id (from your invitation)</label>
+<input id="attid" autocomplete="off">
+<label for="level">Level (0 to 5)</label>
+<input id="level" type="number" min="0" max="5" step="1" value="3">
+<button id="commit" type="button">Commit (blind)</button>
+<label for="date">Date of the sitting</label>
+<input id="date" placeholder="YYYY-MM-DD">
+<button id="reveal" type="button">Reveal</button>
+<pre id="attout" aria-live="polite"></pre>
+</section>
+</main>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

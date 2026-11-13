@@ -8,7 +8,7 @@ description: Was Sanad heute ist, was geprüft wurde, was nicht, und was Sanad n
 ---
 
 <!-- glance -->
-- Version 0.1.
+- Spezifikation in Version 0.1; Code in Version 0.2 (Algorithmus-Kennung `sanad-0.1`, mit drei Regelabweichungen vom v0.1-Referenzcode, die offene Entscheidungen sind).
 - Keine Akkreditierung. Kein Token. Keine Rangliste von Personen.
 - Vorerst eine verantwortliche Person; eine Stiftung in den Vereinigten Arabischen Emiraten ist in Vorbereitung.
 <!-- /glance -->
@@ -16,8 +16,10 @@ description: Was Sanad heute ist, was geprüft wurde, was nicht, und was Sanad n
 ## Was es heute gibt
 
 - Eine [Spezifikation](/spec/0.1/) (SANAD-SPEC-0.1, englisch): Datenmodell, kanonische Hashes, die Anerkennungsfunktion (Regeln R1 bis R8), Transparenzprotokoll, Datenschutz und Auffindbarkeit, Bedrohungen, Governance und offene Fragen.
-- Diese Website auf Englisch mit Übersetzungsentwürfen.
-- Eine Referenzimplementierung und eine interaktive Erklärseite sind in Vorbereitung.
+- Diese Website auf Englisch und Deutsch; maßgeblich ist der englische Text.
+- Eine Referenzimplementierung mit 20 Konformitätsvektoren und eine interaktive Erklärseite, vorerst vom Kamangir-Projekt gehostet.
+- Die [Engine](/de/engine/) (Code-Version 0.2): Prüfungsvorlagen, verdeckte Festlegung und Offenlegung mit Ed25519-Signaturen, ein Transparenzprotokoll mit Inklusions- und Konsistenzbeweisen, eine HTTP-Schnittstelle, ein Kommandozeilenwerkzeug, drei Beispielprüfungen und Engine-Vektoren.
+- Der erste Betreiber der Engine, der Prüfungsdienst von Kamangir, nur im Testbetrieb.
 
 ## Was noch nicht geschehen ist
 
@@ -25,6 +27,8 @@ description: Was Sanad heute ist, was geprüft wurde, was nicht, und was Sanad n
 - Marken- und Urheberrechtseintragung (siehe [Name und Schutzrechte](/name-and-ip/)).
 - Unabhängige Implementierungen, Konformitätsprüfungen, Bestätigende außerhalb des Umfelds des Autors.
 - Prüfung des deutschen Textes durch Muttersprachler.
+- Externe Prüfung der Kryptografie der Engine.
+- Ein npm-Paket oder eine mit Tag versehene Veröffentlichung des Codes.
 
 ## Was Sanad nicht behauptet
 

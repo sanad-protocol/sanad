@@ -1,0 +1,23 @@
+{
+  "id": "code-portfolio-v1",
+  "version": 1,
+  "title": "Portfolio review in software testing",
+  "description": "Reviewers read a submitted repository and a peer review; no live sitting is required.",
+  "skill": { "id": "software.testing", "title": "Writing automated tests" },
+  "levels": [
+    { "level": 0, "label": "No working tests" },
+    { "level": 1, "label": "A few example-based tests" },
+    { "level": 2, "label": "Tests cover the main paths" },
+    { "level": 3, "label": "Tests cover edge cases and failures" },
+    { "level": 4, "label": "Property-based and integration tests" },
+    { "level": 5, "label": "Test strategy others adopt" }
+  ],
+  "evidence": [
+    { "key": "E1", "kind": "artifact", "summary": "Repository snapshot (commit hash and tree hash in the body)" },
+    { "key": "E2", "kind": "peer", "summary": "Written review by a collaborator" }
+  ],
+  "attestors": { "min": 2, "max": 4, "roles": ["reviewer"] },
+  "liveSitting": false,
+  "deadlines": { "commitHours": 72, "revealHours": 72 },
+  "policy": { "id": "code-portfolio-relaxed-1", "minAttestors": 2, "requireLive": false, "halfLifeMonths": 18, "minAttestorSittings": 0, "minAgreement": 0, "maxInferenceDepth": 1, "inferenceDecay": 0.7 }
+}

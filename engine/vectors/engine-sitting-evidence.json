@@ -1,0 +1,405 @@
+{
+  "id": "engine-sitting-evidence",
+  "description": "Sitting evidence (SPEC 3.3). The template requires recordingSha256, strokeLogHead and identityAssurance. Members are added after the sitting with addEvidence: a malformed hash, a recording hash without its byte count and an identity statement with a tampered level are refused; a member already set is never overwritten (a different value is evidence_conflict, the same value is a no-op); after the first commit the evidence is fixed (evidence_sealed). The credential lists the item under process.evidenceAdded, verifies with every check true, and fails when the verifier requires identity level A2 and only A1 was recorded.",
+  "setup": {
+    "clock": "2026-03-01T09:00:00.000Z",
+    "template": {
+      "id": "maths-oral-v1",
+      "version": 1,
+      "title": "Maths oral",
+      "skill": {
+        "id": "analysis.limits",
+        "title": "Limits"
+      },
+      "levels": [
+        {
+          "level": 0,
+          "label": "L0"
+        },
+        {
+          "level": 1,
+          "label": "L1"
+        },
+        {
+          "level": 2,
+          "label": "L2"
+        },
+        {
+          "level": 3,
+          "label": "L3"
+        },
+        {
+          "level": 4,
+          "label": "L4"
+        },
+        {
+          "level": 5,
+          "label": "L5"
+        }
+      ],
+      "evidence": [
+        {
+          "key": "E1",
+          "kind": "sitting",
+          "summary": "Oral sitting",
+          "requireRecordingHash": true,
+          "requireStrokeLogHead": true,
+          "requireIdentityAssurance": true
+        }
+      ],
+      "attestors": {
+        "min": 2,
+        "max": 3,
+        "roles": [
+          "examiner"
+        ]
+      },
+      "liveSitting": true,
+      "deadlines": {
+        "commitHours": 24,
+        "revealHours": 48
+      },
+      "policy": {
+        "id": "p1",
+        "minAttestors": 2,
+        "requireLive": true,
+        "halfLifeMonths": 24,
+        "minAttestorSittings": 0,
+        "minAgreement": 0,
+        "maxInferenceDepth": 2,
+        "inferenceDecay": 0.8
+      }
+    },
+    "assessment": {
+      "id": "as-1",
+      "templateId": "maths-oral-v1",
+      "subject": "urn:uuid:11111111-1111-4111-8111-111111111111",
+      "claimedLevel": 4,
+      "evidence": [
+        {
+          "key": "E1",
+          "date": "2026-03-01",
+          "summary": "Oral sitting of 40 minutes",
+          "body": {
+            "minutes": 40
+          }
+        }
+      ]
+    },
+    "people": {
+      "A": {
+        "seed": 10
+      },
+      "B": {
+        "seed": 11
+      },
+      "R": {
+        "seed": 30
+      }
+    }
+  },
+  "steps": [
+    {
+      "op": "invite",
+      "who": "A",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a01"
+      }
+    },
+    {
+      "op": "invite",
+      "who": "B",
+      "role": "examiner",
+      "evidence": "E1",
+      "expect": {
+        "attestationId": "as-1.a02"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {
+        "sittingId": "sit-0001",
+        "strokeLogHead": "xyz"
+      },
+      "expect": {
+        "error": "bad_evidence"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {
+        "sittingId": "sit-0001",
+        "paperFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "strokeLogHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "expect": {
+        "added": [
+          "paperFingerprint",
+          "sittingId",
+          "strokeLogHead"
+        ],
+        "changed": true,
+        "hash": "d8f785071b7c0cbdae466567476f83b1431de1272bbf78d50560106b3586230c"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {
+        "sittingId": "sit-0001",
+        "paperFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "expect": {
+        "added": [],
+        "changed": false,
+        "hash": "d8f785071b7c0cbdae466567476f83b1431de1272bbf78d50560106b3586230c"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {
+        "paperFingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "expect": {
+        "error": "evidence_conflict"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {
+        "recordingSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      },
+      "expect": {
+        "error": "bad_evidence"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {
+        "recordingSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "recordingCipherSha256": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "recordingBytes": 52428800
+      },
+      "expect": {
+        "added": [
+          "recordingBytes",
+          "recordingCipherSha256",
+          "recordingSha256"
+        ],
+        "changed": true,
+        "hash": "cf726a5ed439731dcaf7bfd3f34f843cb4b6e69a113e4507b163373e68d3a102"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {},
+      "identity": {
+        "by": "R",
+        "level": "A1",
+        "method": "document-on-camera",
+        "date": "2026-03-01",
+        "candidateSeed": 40,
+        "sittingId": "sit-0001",
+        "tamperLevel": "A2"
+      },
+      "expect": {
+        "error": "bad_evidence"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E9",
+      "body": {
+        "sittingId": "sit-0001"
+      },
+      "expect": {
+        "error": "bad_evidence"
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {
+        "publication": {
+          "scope": "hashes",
+          "date": "2026-03-01",
+          "url": "https://example.org/sanad/"
+        }
+      },
+      "identity": {
+        "by": "R",
+        "level": "A1",
+        "method": "document-on-camera",
+        "date": "2026-03-01",
+        "candidateSeed": 40,
+        "sittingId": "sit-0001"
+      },
+      "expect": {
+        "added": [
+          "identityAssurance",
+          "publication"
+        ],
+        "changed": true,
+        "hash": "6f369c1be00fa23a805d8decf1d93a961a51743b5fea812a698f76d542ffb108"
+      }
+    },
+    {
+      "op": "evidenceOf",
+      "key": "E1",
+      "expect": {
+        "hash": "6f369c1be00fa23a805d8decf1d93a961a51743b5fea812a698f76d542ffb108",
+        "members": [
+          "date",
+          "identityAssurance",
+          "kind",
+          "minutes",
+          "paperFingerprint",
+          "publication",
+          "recordingBytes",
+          "recordingCipherSha256",
+          "recordingSha256",
+          "sittingId",
+          "strokeLogHead"
+        ]
+      }
+    },
+    {
+      "op": "commit",
+      "who": "A",
+      "att": "as-1.a01",
+      "level": 4,
+      "nonce": "aaaaaaaaaaaaaaaaaaaaaa",
+      "expect": {
+        "committed": 1,
+        "of": 2
+      }
+    },
+    {
+      "op": "addEvidence",
+      "key": "E1",
+      "body": {
+        "minutes": 41
+      },
+      "expect": {
+        "error": "evidence_sealed"
+      }
+    },
+    {
+      "op": "commit",
+      "who": "B",
+      "att": "as-1.a02",
+      "level": 4,
+      "nonce": "bbbbbbbbbbbbbbbbbbbbbb",
+      "expect": {
+        "committed": 2,
+        "of": 2
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "A",
+      "att": "as-1.a01",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 1,
+        "of": 2
+      }
+    },
+    {
+      "op": "reveal",
+      "who": "B",
+      "att": "as-1.a02",
+      "date": "2026-03-01",
+      "expect": {
+        "revealed": 2,
+        "of": 2
+      }
+    },
+    {
+      "op": "finalize",
+      "expect": {
+        "bundleHash": "ced706713b22c8df026e42321e4b75f22335ed0709b022388ec3b21ca8270e13",
+        "process": {
+          "invited": 2,
+          "committed": 2,
+          "revealed": 2,
+          "missing": [],
+          "late": [],
+          "notCommitted": [],
+          "evidenceAdded": [
+            "as-1.E1"
+          ]
+        },
+        "checksPass": true,
+        "recognition": {
+          "status": "recognised",
+          "level": 4,
+          "confidence": 0.84
+        },
+        "attestorStats": {
+          "did:key:z6Mkj1MDZKcfx9AX5CeXHdysiGkRLzBbALyFuShD6wNeY1E3": {
+            "sittings": 0,
+            "agreement": 0
+          },
+          "did:key:z6MkmNL6xksdEJENGk9Z1qqGsY5njKQdjU1UhnUEUvWyQUVX": {
+            "sittings": 0,
+            "agreement": 0
+          }
+        },
+        "logSize": 5,
+        "logRoot": "331958338d57dfc1aa6d69c4566b9abc0498620184feb853ac7d42f57b350819"
+      }
+    },
+    {
+      "op": "verify",
+      "expect": {
+        "ok": true,
+        "failed": [],
+        "recognition": {
+          "status": "recognised",
+          "level": 4,
+          "confidence": 0.84
+        },
+        "dropped": []
+      }
+    },
+    {
+      "op": "verify",
+      "minIdentityLevel": "A1",
+      "expect": {
+        "ok": true,
+        "failed": [],
+        "recognition": {
+          "status": "recognised",
+          "level": 4,
+          "confidence": 0.84
+        },
+        "dropped": []
+      }
+    },
+    {
+      "op": "verify",
+      "minIdentityLevel": "A2",
+      "expect": {
+        "ok": false,
+        "failed": [
+          "sitting-evidence"
+        ],
+        "recognition": {
+          "status": "recognised",
+          "level": 4,
+          "confidence": 0.84
+        },
+        "dropped": []
+      }
+    }
+  ]
+}

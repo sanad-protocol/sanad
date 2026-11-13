@@ -1,0 +1,19 @@
+{
+  "name": "@sanad-protocol/engine",
+  "version": "0.2.0",
+  "description": "Sanad engine: run assessments with blind commit-and-reveal marking, signed attestations, a transparency log and recomputable credentials (algorithm sanad-0.1). No runtime dependencies.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./src/index.mjs",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": { "types": "./index.d.ts", "import": "./src/index.mjs" },
+    "./bundle": "./dist/sanad-engine.mjs",
+    "./package.json": "./package.json"
+  },
+  "bin": { "sanad-engine": "./bin/sanad-engine" },
+  "files": ["src/", "dist/", "static/", "examples/", "vectors/", "bin/", "index.d.ts", "DESIGN.md", "README.md"],
+  "engines": { "node": ">=22" },
+  "repository": { "type": "git", "url": "https://github.com/sanad-protocol/sanad.git", "directory": "engine" },
+  "sideEffects": false
+}

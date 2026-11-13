@@ -1,0 +1,20 @@
+{
+  "name": "@sanad-protocol/core",
+  "version": "0.2.0",
+  "description": "Sanad core: canonical JSON, SHA-256, sealing helpers and the recognition function (rules R1 to R8, algorithm sanad-0.1), with the conformance vectors.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "./dist/sanad-reference.mjs",
+  "types": "./dist/sanad-reference.d.ts",
+  "exports": {
+    ".": { "types": "./dist/sanad-reference.d.ts", "import": "./dist/sanad-reference.mjs" },
+    "./run": "./run.mjs",
+    "./vectors.json": "./vectors.json",
+    "./package.json": "./package.json"
+  },
+  "bin": { "sanad": "./bin/sanad.mjs" },
+  "files": ["dist/", "bin/", "run.mjs", "verify.mjs", "vectors.json", "README.md"],
+  "engines": { "node": ">=22" },
+  "repository": { "type": "git", "url": "https://github.com/sanad-protocol/sanad.git", "directory": "reference" },
+  "sideEffects": false
+}

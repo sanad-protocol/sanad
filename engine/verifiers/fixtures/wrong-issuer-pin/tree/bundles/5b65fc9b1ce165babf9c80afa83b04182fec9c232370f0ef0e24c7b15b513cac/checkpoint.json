@@ -1,0 +1,9 @@
+{
+  "payload": {
+    "logId": "sanad-log",
+    "size": 5,
+    "rootHash": "f7e8ebd06635d775cb81bd529d5e2c19b1290ace621f7638a130ae87c4626a50",
+    "timestamp": "2026-03-01T09:00:00.000Z"
+  },
+  "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa285aFRnZ013alNURWFKYVBVZkU2dHFjeTJ4dlU2Qm5OcTNlM284cVZCaXlII3o2TWtvOWhUZ2dNd2pTVEVhSmFQVWZFNnRxY3kyeHZVNkJuTnEzZTNvOHFWQml5SCIsInR5cCI6InNhbmFkLWNoZWNrcG9pbnQrandzIn0..9rVDlY5wymx8V87VBh3Ev8YFJDVMKmShf7cMpZ9kbdaWZ2FJiGVx85A2PV4ZSjuaO5MP2-lHdKpJzBpG39j6AA"
+}
