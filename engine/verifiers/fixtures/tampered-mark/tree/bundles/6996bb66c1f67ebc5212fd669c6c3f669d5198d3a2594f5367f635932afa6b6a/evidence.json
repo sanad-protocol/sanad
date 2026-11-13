@@ -1,0 +1,14 @@
+[
+  {
+    "id": "as-1.E1",
+    "kind": "sitting",
+    "date": "2026-03-01",
+    "summary": "Oral sitting of 40 minutes",
+    "body": {
+      "minutes": 40,
+      "kind": "sitting",
+      "date": "2026-03-01"
+    },
+    "hash": "2730b22258cb28fe8647b62072288fc849325cf2defc4a1b7c038581b8bc4451"
+  }
+]

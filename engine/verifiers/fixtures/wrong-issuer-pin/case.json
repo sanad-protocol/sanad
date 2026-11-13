@@ -1,0 +1,23 @@
+{
+  "name": "wrong-issuer-pin",
+  "description": "The verifier pinned another issuer DID.",
+  "evaluatedAt": "2026-03-02T00:00:00.000Z",
+  "options": {
+    "policy": {
+      "minAttestors": 2,
+      "requireLive": true,
+      "halfLifeMonths": 24,
+      "minAttestorSittings": 0,
+      "minAgreement": 0,
+      "maxInferenceDepth": 2,
+      "inferenceDecay": 0.8,
+      "asOf": "2026-03-02"
+    },
+    "trustedIssuers": [
+      "did:key:z6MkqkvU4fDR9KkZHacVgTqDKwWkcAXJY2TfKsYnpm7G4KYr"
+    ],
+    "trustedLogKeys": [
+      "did:key:z6Mko9hTggMwjSTEaJaPUfE6tqcy2xvU6BnNq3e3o8qVBiyH"
+    ]
+  }
+}

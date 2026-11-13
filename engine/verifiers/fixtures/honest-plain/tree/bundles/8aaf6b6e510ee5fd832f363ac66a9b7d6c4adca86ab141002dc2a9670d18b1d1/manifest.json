@@ -1,0 +1,16 @@
+{
+  "type": "sanad-bundle-manifest",
+  "version": 1,
+  "bundleHash": "8aaf6b6e510ee5fd832f363ac66a9b7d6c4adca86ab141002dc2a9670d18b1d1",
+  "files": {
+    "README.md": "be167e67dcf954cbbb56bc2e95aefc25f236489456e5e9b275f8dcd74a8b97c7",
+    "attestations.json": "64b8c1506e0d784fb37b0df9de995b1203eb6561bb2a89fabf8a4178f88ad68f",
+    "checkpoint.json": "63b54fbc0cdae96854bd8f6bc01f7c2fa7b4e7179e867373667afce3027bcc6c",
+    "consistency.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "credential.json": "7c64ca05426d05d8bec5e5bdeb6963bfb3b525e609d0c64b065403d97adfad1d",
+    "dids.json": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+    "evidence.json": "efd97ff03c00a457d26a7af6689bd738330f168c897ccbc6a2b48be9e4c909a8",
+    "log.json": "709f479d1e79a60bfcc4886a565aab2a65203d1685a389ea0cb94f5c16ee46c8",
+    "status.json": "176fc3ef25b96e456978f73e8650589577fa792a41d9c35e01eb0ae19cc79358"
+  }
+}

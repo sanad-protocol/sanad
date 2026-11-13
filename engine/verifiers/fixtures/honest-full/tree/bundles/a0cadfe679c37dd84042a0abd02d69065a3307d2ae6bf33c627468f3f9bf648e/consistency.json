@@ -1,0 +1,26 @@
+[
+  {
+    "from": {
+      "size": 5,
+      "rootHash": "c39f2aab9e280cf525099dbb8597620dd4b8cf0e18ff39d7a1ab8929406264c2"
+    },
+    "to": {
+      "checkpoint": {
+        "payload": {
+          "logId": "sanad-log",
+          "size": 10,
+          "rootHash": "92752f1aea2179461f21f5f4a2dd80f73230a5a4caa36c01cde2a54464bc50e1",
+          "timestamp": "2026-03-01T09:00:01.000Z"
+        },
+        "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa285aFRnZ013alNURWFKYVBVZkU2dHFjeTJ4dlU2Qm5OcTNlM284cVZCaXlII3o2TWtvOWhUZ2dNd2pTVEVhSmFQVWZFNnRxY3kyeHZVNkJuTnEzZTNvOHFWQml5SCIsInR5cCI6InNhbmFkLWNoZWNrcG9pbnQrandzIn0..YH2SqHik0iBj-jgxm2ed2bDfOp6eU1ZgbHJTKkfC5ZThXp-fsJ3e7FYs5fBGfT0NSdd9ph0O3HCO1ABYUcgjBw"
+      }
+    },
+    "proof": [
+      "168d5bde18cdb84625951d2bdef15e0fcb81cd3ac352c8ccc886b5120140dfdf",
+      "4beff3fed98406e737e48d6d2103dae0205969cc797de9e3915f88aacc5f563e",
+      "617db3b5b6ac88bc1207dc0cc02952839fe9209ed15ddb28216f487782feec01",
+      "d43158f451642ce9d0285e74cc04e6084643fe93fa2d5f55cdd530df78284195",
+      "9d0f765a40a14efd14a4187668d0256168dac0a18370fe8869441c7680b8deeb"
+    ]
+  }
+]

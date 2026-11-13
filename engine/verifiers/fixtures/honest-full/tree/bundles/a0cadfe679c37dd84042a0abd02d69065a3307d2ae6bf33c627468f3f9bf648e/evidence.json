@@ -1,0 +1,33 @@
+[
+  {
+    "id": "as-1.E1",
+    "kind": "sitting",
+    "date": "2026-03-01",
+    "summary": "Oral sitting of 40 minutes",
+    "body": {
+      "minutes": 40,
+      "kind": "sitting",
+      "date": "2026-03-01",
+      "sittingId": "sit-as-1",
+      "paperFingerprint": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "strokeLogHead": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recordingSha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "recordingCipherSha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+      "recordingBytes": 52428800,
+      "publication": {
+        "scope": "hashes",
+        "date": "2026-03-01",
+        "url": "https://example.org/sanad/"
+      },
+      "identityAssurance": {
+        "level": "A1",
+        "method": "document-on-camera",
+        "checkedBy": "did:key:z6Mkr61uLP9M4o2ZsxoycpeAft9i6BHZFmmZVgvmkkbL5rsb",
+        "date": "2026-03-01",
+        "candidateKey": "zGhFJh9xhWQULf6W1WJLNTViiTWEs4wAj3FevZ616wxL2",
+        "signature": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa3I2MXVMUDlNNG8yWnN4b3ljcGVBZnQ5aTZCSFpGbW1aVmd2bWtrYkw1cnNiI3o2TWtyNjF1TFA5TTRvMlpzeG95Y3BlQWZ0OWk2QkhaRm1tWlZndm1ra2JMNXJzYiIsInR5cCI6InNhbmFkLWlkZW50aXR5K2p3cyJ9..JOa_Om9Qh4zyXOAm2rVhXJYNQN7Hv2Q_Ei5m7OgUZTgZwbC9kXx_TcXxr0mcejn4whpepRWR7nyXStyKDaGhAg"
+      }
+    },
+    "hash": "61701b13767aeecc3af4d873294c5d57e6720ac722b5af806da65a8909e75260"
+  }
+]

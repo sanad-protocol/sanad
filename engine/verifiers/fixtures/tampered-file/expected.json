@@ -1,0 +1,11 @@
+{
+  "ok": false,
+  "checks": [
+    {
+      "name": "bundle-files",
+      "ok": false
+    }
+  ],
+  "warnings": 0,
+  "recognition": null
+}

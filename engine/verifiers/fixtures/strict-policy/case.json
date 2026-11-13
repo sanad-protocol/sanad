@@ -1,0 +1,23 @@
+{
+  "name": "strict-policy",
+  "description": "A policy asking for three attestors over a two-examiner credential: provisional.",
+  "evaluatedAt": "2026-03-02T00:00:00.000Z",
+  "options": {
+    "policy": {
+      "minAttestors": 3,
+      "requireLive": true,
+      "halfLifeMonths": 24,
+      "minAttestorSittings": 0,
+      "minAgreement": 0,
+      "maxInferenceDepth": 2,
+      "inferenceDecay": 0.8,
+      "asOf": "2026-03-02"
+    },
+    "trustedIssuers": [
+      "did:key:z6Mkon3Necd6NkkyfoGoHxid2znGc59LU3K7mubaRcFbLfLX"
+    ],
+    "trustedLogKeys": [
+      "did:key:z6Mko9hTggMwjSTEaJaPUfE6tqcy2xvU6BnNq3e3o8qVBiyH"
+    ]
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "@context": [
+    "https://www.w3.org/ns/credentials/v2"
+  ],
+  "id": "https://example.org/sanad/status/revocation.json",
+  "type": [
+    "VerifiableCredential",
+    "BitstringStatusListCredential"
+  ],
+  "issuer": "did:key:z6Mkon3Necd6NkkyfoGoHxid2znGc59LU3K7mubaRcFbLfLX",
+  "validFrom": "2026-03-01T09:00:01.000Z",
+  "validUntil": "2026-03-08T09:00:01.000Z",
+  "credentialSubject": {
+    "id": "https://example.org/sanad/status/revocation.json#list",
+    "type": "BitstringStatusList",
+    "statusPurpose": "revocation",
+    "encodedList": "uH4sIAAAAAAAAE-3BMQEAAADCoPVPbQwfoAAAAAAAAAAAAAAAAAAAAIC3AYbSVKsAQAAA"
+  },
+  "proof": {
+    "type": "SanadDetachedJws",
+    "verificationMethod": "did:key:z6Mkon3Necd6NkkyfoGoHxid2znGc59LU3K7mubaRcFbLfLX#z6Mkon3Necd6NkkyfoGoHxid2znGc59LU3K7mubaRcFbLfLX",
+    "created": "2026-03-01T09:00:01.000Z",
+    "jws": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa29uM05lY2Q2TmtreWZvR29IeGlkMnpuR2M1OUxVM0s3bXViYVJjRmJMZkxYI3o2TWtvbjNOZWNkNk5ra3lmb0dvSHhpZDJ6bkdjNTlMVTNLN211YmFSY0ZiTGZMWCIsInR5cCI6InNhbmFkLXN0YXR1cy1saXN0K2p3cyJ9..60ecrNH6J1c3PJV9-5ngPC05Ky0RjBFVpSDykDCqxHh91e5j72jvRqxyFmWoyMI9XqhJIFsSpr-s7fY0PTeUDw"
+  }
+}

@@ -1,0 +1,86 @@
+{
+  "ok": true,
+  "checks": [
+    {
+      "name": "bundle-files",
+      "ok": true
+    },
+    {
+      "name": "bundle-consistency",
+      "ok": true
+    },
+    {
+      "name": "issuer-card",
+      "ok": true
+    },
+    {
+      "name": "consistency-proofs",
+      "ok": true
+    },
+    {
+      "name": "shape",
+      "ok": true
+    },
+    {
+      "name": "issuer-proof",
+      "ok": true
+    },
+    {
+      "name": "bundle-hash",
+      "ok": true
+    },
+    {
+      "name": "evidence-consistency",
+      "ok": true
+    },
+    {
+      "name": "sitting-evidence",
+      "ok": true
+    },
+    {
+      "name": "ids",
+      "ok": true
+    },
+    {
+      "name": "attestor-signatures",
+      "ok": true
+    },
+    {
+      "name": "log",
+      "ok": true
+    },
+    {
+      "name": "witnesses",
+      "ok": true
+    },
+    {
+      "name": "revocation",
+      "ok": true
+    },
+    {
+      "name": "trusted-issuer",
+      "ok": true
+    },
+    {
+      "name": "trusted-log-key",
+      "ok": true
+    },
+    {
+      "name": "process",
+      "ok": true
+    },
+    {
+      "name": "policy",
+      "ok": true
+    }
+  ],
+  "warnings": 2,
+  "recognition": {
+    "status": "recognised",
+    "level": 4,
+    "attestedLevel": 4,
+    "confidence": 0.84,
+    "dropped": [],
+    "unverified": false
+  }
+}

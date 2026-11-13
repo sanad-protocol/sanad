@@ -1,0 +1,30 @@
+[
+  {
+    "id": "as-1.a01",
+    "attestor": "did:key:z6Mkj1MDZKcfx9AX5CeXHdysiGkRLzBbALyFuShD6wNeY1E3",
+    "evidence": "as-1.E1",
+    "level": 4,
+    "role": "examiner",
+    "conflictDeclared": false,
+    "date": "2026-03-01",
+    "commit": "b2cdb7a1ab152947a8883f6fdd7820ec653bbde63a67d14ed427ba14ae6db8c2",
+    "nonce": "FDmn8dIMGnaXbyKG0hXSOQ",
+    "prev": "GENESIS",
+    "signature": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDprZXk6ejZNa2oxTURaS2NmeDlBWDVDZVhIZHlzaUdrUkx6QmJBTHlGdVNoRDZ3TmVZMUUzI3o2TWtqMU1EWktjZng5QVg1Q2VYSGR5c2lHa1JMekJiQUx5RnVTaEQ2d05lWTFFMyIsInR5cCI6InNhbmFkLWF0dGVzdGF0aW9uK2p3cyJ9..l83Kvo9uxcOBTOqgvIWXZeUF9caKtIPwfhbHl304O4iEZTe2AldmhTuHY_TM-tNP78ypJ2gtTarGaWkHM_wRAA",
+    "hash": "5fbc4cce215717551ed7a132d1fb7a23aa8da3cbefc698e358a859ccbb41aded"
+  },
+  {
+    "id": "as-1.a02",
+    "attestor": "did:web:examiner.example",
+    "evidence": "as-1.E1",
+    "level": 4,
+    "role": "examiner",
+    "conflictDeclared": false,
+    "date": "2026-03-01",
+    "commit": "5b020907cf825bb2efe2a6eff261dd11bfac5a0fa9bda875a48f963ec3dcff5f",
+    "nonce": "0OQx4_egxZlaeCnDywJ_0A",
+    "prev": "5fbc4cce215717551ed7a132d1fb7a23aa8da3cbefc698e358a859ccbb41aded",
+    "signature": "eyJhbGciOiJFZERTQSIsImtpZCI6ImRpZDp3ZWI6ZXhhbWluZXIuZXhhbXBsZSNrMiIsInR5cCI6InNhbmFkLWF0dGVzdGF0aW9uK2p3cyJ9..8SFO7EietktGY3D7pCouPVAiOBM0PbJT8vJiJ9ZNYH9xiTE0FTqCkR7GNT5z4UemV55O7O937WvogTP4nDGMBw",
+    "hash": "8f7d326915b8a4538e5de1378d0f468f9362e141df334490aac1ff83b93a796c"
+  }
+]

@@ -1,0 +1,29 @@
+{
+  "name": "honest-full",
+  "description": "Two examiners, full sitting evidence with identity level A1, status list (clear), one witness cosigned a later checkpoint. Everything passes.",
+  "evaluatedAt": "2026-03-02T00:00:00.000Z",
+  "options": {
+    "policy": {
+      "minAttestors": 2,
+      "requireLive": true,
+      "halfLifeMonths": 24,
+      "minAttestorSittings": 0,
+      "minAgreement": 0,
+      "maxInferenceDepth": 2,
+      "inferenceDecay": 0.8,
+      "asOf": "2026-03-02"
+    },
+    "trustedIssuers": [
+      "did:key:z6Mkon3Necd6NkkyfoGoHxid2znGc59LU3K7mubaRcFbLfLX"
+    ],
+    "trustedLogKeys": [
+      "did:key:z6Mko9hTggMwjSTEaJaPUfE6tqcy2xvU6BnNq3e3o8qVBiyH"
+    ],
+    "minIdentityLevel": "A1",
+    "requireWitnesses": 1,
+    "trustedWitnesses": [
+      "did:key:z6MkknhhwAGsRrcTTthPSsBbQtrNX6CMqt4poro5jdP6uCue"
+    ],
+    "requireStatus": true
+  }
+}
