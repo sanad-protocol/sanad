@@ -837,7 +837,7 @@ return { canonical, hashOf, recognise, policyProblems, attestationPayload, sha25
         eq('evidence.json', sanad.bundle?.evidence); eq('attestations.json', sanad.bundle?.attestations);
         eq('log.json', { logId: sanad.log?.logId, logKey: sanad.log?.logKey, entries: sanad.log?.entries, proofs: sanad.log?.proofs });
         eq('checkpoint.json', sanad.log?.checkpoint); eq('dids.json', sanad.dids);
-        ADD('bundle-consistency', why.length === 0, why.length ? why.join('; ') : 'split files agree with the credential');
+        ADD('bundle-consistency', why.length === 0, why.length ? why.join('; ') : 'split files agree with the credential'); if (why.length) return out();
       }
       const used = new Map(), embedded = Array.isArray(sanad.dids) ? sanad.dids : [];
       const res = makeResolver(embedded, used);

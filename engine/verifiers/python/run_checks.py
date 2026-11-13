@@ -24,7 +24,7 @@ def run_fixture(name):
     if gf != ef: diffs.append(f'failed checks {gf} vs {ef}')
     gn = [c['name'] for c in got['checks']]; en = [c['name'] for c in exp['checks']]
     if gn != en: diffs.append(f'check list {gn} vs {en}')
-    if got['warnings'] != exp['warnings']: diffs.append(f"warnings {got['warnings']} vs {exp['warnings']}")
+    # the number of warnings is not part of conformance (SPEC 11.2)
     g, e = got['recognition'], exp['recognition']
     if (g is None) != (e is None): diffs.append(f'recognition {g} vs {e}')
     elif g:

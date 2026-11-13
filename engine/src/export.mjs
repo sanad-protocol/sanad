@@ -216,6 +216,7 @@ export function verifyBundleFiles(files, opts = {}) {
       eq('log.json', { logId: sanad.log?.logId, logKey: sanad.log?.logKey, entries: sanad.log?.entries, proofs: sanad.log?.proofs });
       eq('checkpoint.json', sanad.log?.checkpoint); eq('dids.json', sanad.dids);
       ADD('bundle-consistency', why.length === 0, why.length ? why.join('; ') : 'evidence, attestations, log, checkpoint and DID files agree with the credential');
+      if (why.length) return finish(null); // SPEC 11.2: a directory that disagrees with its credential is not examined further
     }
 
     // 3. issuer card (when present): the card names this credential's issuer and log, signed by the issuer

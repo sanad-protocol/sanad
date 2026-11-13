@@ -2860,6 +2860,7 @@ function verifyBundleFiles(files, opts = {}) {
       eq("checkpoint.json", sanad.log?.checkpoint);
       eq("dids.json", sanad.dids);
       ADD2("bundle-consistency", why.length === 0, why.length ? why.join("; ") : "evidence, attestations, log, checkpoint and DID files agree with the credential");
+      if (why.length) return finish(null);
     }
     const cardText = files.get("issuer.json");
     if (cardText === void 0) warnings.push("no issuer.json next to the bundles: the issuer card was not checked");

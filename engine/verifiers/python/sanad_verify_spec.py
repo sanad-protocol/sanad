@@ -470,6 +470,7 @@ def verify(tree, case):
                 p = os.path.join(bdir, fn)
                 if '/' in fn or not os.path.isfile(p) or sha(open(p, 'rb').read()) != h: ok = False
     add('bundle-files', ok)
+    if not ok: return {'ok': False, 'checks': checks, 'warnings': 0, 'recognition': None}  # SPEC 11.2: stop
     shape = isinstance(cred, dict) and shape_ok(cred)
     if not shape:
         add('bundle-consistency', False); add('issuer-card', False); add('consistency-proofs', False); add('shape', False)
@@ -487,6 +488,7 @@ def verify(tree, case):
         try: ok = ok and canon(d) == canon(part)
         except Exception: ok = False
     add('bundle-consistency', ok)
+    if not ok: return {'ok': False, 'checks': checks, 'warnings': 0, 'recognition': None}  # SPEC 11.2: stop
     # --- issuer-card
     ok = True
     try:
